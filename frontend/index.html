@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobPulse — Real-Time Job Discovery Platform</title>
+  <!-- Modern Font Imports -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-brand">
+        <div class="logo-icon">⚡</div>
+        <span class="brand-title">JobPulse</span>
+        <span class="badge badge-pulse">LIVE INDEXING</span>
+      </div>
+
+      <div class="header-actions">
+        <button id="cmd-k-btn" class="cmd-k-trigger" title="Press Ctrl+K">
+          <span>🔍 Quick Search...</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+        <button id="sync-now-btn" class="btn btn-sm btn-outline">
+          <span class="icon">🔄</span> Sync Sources
+        </button>
+        <button id="theme-toggle" class="btn btn-sm btn-icon" title="Toggle Light/Dark Theme">
+          🌙
+        </button>
+        <div class="notification-bell" id="notif-bell" title="Notification Center">
+          🔔 <span id="notif-count" class="bell-badge">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <div class="main-workspace">
+      <!-- Left Navigation Sidebar -->
+      <aside class="sidebar">
+        <nav class="nav-menu">
+          <a href="#" class="nav-item active" data-tab="jobs">
+            <span class="icon">💼</span> Discover Jobs
+          </a>
+          <a href="#" class="nav-item" data-tab="searches">
+            <span class="icon">💾</span> Saved Searches
+          </a>
+          <a href="#" class="nav-item" data-tab="bookmarks">
+            <span class="icon">⭐</span> Bookmarks & Applications
+          </a>
+          <a href="#" class="nav-item" data-tab="analytics">
+            <span class="icon">📈</span> Analytics
+          </a>
+          <a href="#" class="nav-item" data-tab="connectors">
+            <span class="icon">🔌</span> Source Connectors
+          </a>
+          <a href="#" class="nav-item" data-tab="telegram">
+            <span class="icon">✈️</span> Telegram Alerts
+          </a>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="status-indicator">
+            <span class="dot active"></span>
+            <span>Scheduler Running</span>
+          </div>
+          <small class="version-tag">JobPulse v1.0 (Open Source)</small>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="content-area">
+
+        <!-- TAB 1: DISCOVER JOBS -->
+        <section id="tab-jobs" class="tab-pane active">
+          <!-- Search & Filter Header -->
+          <div class="search-panel">
+            <div class="search-input-wrapper">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="job-search-input" placeholder="Search title, keywords (e.g. Backend AND Python NOT Senior)...">
+              <button id="run-search-btn" class="btn btn-primary">Search</button>
+            </div>
+
+            <div class="filter-bar">
+              <div class="filter-group">
+                <label>Experience:</label>
+                <select id="filter-exp">
+                  <option value="">All Experience Levels</option>
+                  <option value="Fresher" selected>Fresher / 0-1 YOE</option>
+                  <option value="2-4">2-4 YOE (Mid Level)</option>
+                  <option value="4+">4+ YOE (High Exp / Senior)</option>
+                </select>
+              </div>
+
+              <div class="filter-group">
+                <label>Work Mode:</label>
+                <select id="filter-remote">
+                  <option value="">All Work Modes</option>
+                  <option value="Remote">Remote Only</option>
+                  <option value="Hybrid">Hybrid</option>
+                  <option value="On-site">On-site</option>
+                </select>
+              </div>
+
+              <div class="filter-group">
+                <label>Min Salary:</label>
+                <select id="filter-salary">
+                  <option value="">Any Salary</option>
+                  <option value="8">₹8 LPA+</option>
+                  <option value="12">₹12 LPA+</option>
+                  <option value="15">₹15 LPA+</option>
+                </select>
+              </div>
+
+              <button id="bookmarked-only-btn" class="btn btn-sm btn-ghost">
+                ⭐ Bookmarked Only
+              </button>
+            </div>
+          </div>
+
+          <!-- Feed Stats Header -->
+          <div class="feed-header">
+            <div class="feed-title">
+              <h2>Matching Opportunities</h2>
+              <span id="job-count-badge" class="badge">0 jobs found</span>
+            </div>
+            <div class="feed-controls">
+              <button id="save-current-search-btn" class="btn btn-sm btn-outline">
+                ➕ Save Search Alert
+              </button>
+            </div>
+          </div>
+
+          <!-- Jobs Cards Container -->
+          <div id="jobs-container" class="jobs-grid">
+            <div class="loading-skeleton">Loading discovery feed...</div>
+          </div>
+        </section>
+
+        <!-- TAB 2: SAVED SEARCHES -->
+        <section id="tab-searches" class="tab-pane">
+          <div class="section-header">
+            <div>
+              <h2>Continuous Saved Searches</h2>
+              <p class="text-muted">JobPulse continuously monitors career pages for these alerts and triggers instant notifications.</p>
+            </div>
+            <button id="create-search-modal-btn" class="btn btn-primary">➕ New Saved Search</button>
+          </div>
+
+          <div id="searches-container" class="table-card-wrapper">
+            <div class="loading-skeleton">Loading saved search rules...</div>
+          </div>
+        </section>
+
+        <!-- TAB 3: BOOKMARKS & APPLICATIONS -->
+        <section id="tab-bookmarks" class="tab-pane">
+          <div class="section-header">
+            <h2>Bookmarked Jobs & Application Tracker</h2>
+            <p class="text-muted">Human-in-the-loop tracker to organize your application journey.</p>
+          </div>
+
+          <div id="bookmarks-container" class="jobs-grid">
+            <div class="loading-skeleton">Loading bookmarked jobs...</div>
+          </div>
+        </section>
+
+        <!-- TAB 4: ANALYTICS -->
+        <section id="tab-analytics" class="tab-pane">
+          <div class="section-header">
+            <h2>Discovery Engine Analytics</h2>
+            <p class="text-muted">Real-time metrics on job indexing and notification success.</p>
+          </div>
+
+          <div class="stats-grid" id="analytics-stats">
+            <div class="stat-card">
+              <span class="stat-label">Jobs Indexed Today</span>
+              <span class="stat-value" id="stat-jobs-today">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Active Saved Searches</span>
+              <span class="stat-value" id="stat-searches">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Telegram Notifications Sent</span>
+              <span class="stat-value" id="stat-notifs">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Companies Tracked</span>
+              <span class="stat-value" id="stat-companies">0</span>
+            </div>
+          </div>
+
+          <div class="analytics-card mt-6">
+            <h3>Top Hiring Tech Companies</h3>
+            <ul id="top-companies-list" class="top-list">
+              <li>Loading top hiring companies...</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- TAB 5: SOURCE CONNECTORS -->
+        <section id="tab-connectors" class="tab-pane">
+          <div class="section-header">
+            <div>
+              <h2>Source Connectors & Health Diagnostics</h2>
+              <p class="text-muted">Plugin-based connector framework indexing ATS boards and company pages.</p>
+            </div>
+            <button id="trigger-sync-panel-btn" class="btn btn-primary">🔄 Run All Connectors Now</button>
+          </div>
+
+          <div id="connectors-container" class="table-card-wrapper">
+            <div class="loading-skeleton">Loading connector status...</div>
+          </div>
+        </section>
+
+        <!-- TAB 6: TELEGRAM ALERTS -->
+        <section id="tab-telegram" class="tab-pane">
+          <div class="section-header">
+            <h2>Telegram Instant Alert Configurator</h2>
+            <p class="text-muted">Link your Telegram account to receive alerts within minutes of new job postings.</p>
+          </div>
+
+          <div class="card card-padded max-w-xl">
+            <h3>Connect Telegram Bot</h3>
+            <p class="text-muted mb-4">Input your Telegram Chat ID below or use the default student test chat ID.</p>
+
+            <div class="form-group">
+              <label>Telegram Chat ID:</label>
+              <input type="text" id="telegram-chat-id-input" value="STUDENT_TELEGRAM_DEMO" class="input-field">
+            </div>
+
+            <div class="button-row">
+              <button id="send-telegram-test-btn" class="btn btn-primary">⚡ Send Test Alert</button>
+            </div>
+
+            <div id="telegram-test-result" class="alert mt-4 hidden"></div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- COMMAND PALETTE MODAL (Ctrl + K) -->
+  <div id="cmd-k-modal" class="modal-overlay hidden">
+    <div class="cmd-k-box">
+      <div class="cmd-k-header">
+        <input type="text" id="cmd-k-input" placeholder="Type a command or job keyword..." autofocus>
+        <kbd>ESC</kbd>
+      </div>
+      <div class="cmd-k-results" id="cmd-k-results">
+        <div class="cmd-k-item" data-action="search-sde">🔍 Search 'Software Engineer' roles</div>
+        <div class="cmd-k-item" data-action="search-ai">🤖 Search 'AI / ML Engineer' roles</div>
+        <div class="cmd-k-item" data-action="search-remote">🌐 Filter 'Remote' roles</div>
+        <div class="cmd-k-item" data-action="open-searches">💾 Open Saved Searches</div>
+        <div class="cmd-k-item" data-action="sync-now">🔄 Trigger Source Sync</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE SAVED SEARCH MODAL -->
+  <div id="save-search-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create Saved Search Alert</h3>
+        <button id="close-modal-btn" class="btn-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Alert Name:</label>
+          <input type="text" id="modal-search-name" placeholder="e.g. SDE 1 Bengaluru Hybrid" class="input-field">
+        </div>
+        <div class="form-group">
+          <label>Keywords / Query:</label>
+          <input type="text" id="modal-search-query" placeholder="e.g. Software Engineer AND Backend" class="input-field">
+        </div>
+        <div class="form-group">
+          <label>Location:</label>
+          <input type="text" id="modal-search-location" placeholder="e.g. Bengaluru" class="input-field">
+        </div>
+        <div class="form-group">
+          <label>Min Salary (LPA):</label>
+          <input type="number" id="modal-search-salary" placeholder="10" class="input-field">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancel-save-search" class="btn btn-ghost">Cancel</button>
+        <button id="confirm-save-search" class="btn btn-primary">Save Alert Rule</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
