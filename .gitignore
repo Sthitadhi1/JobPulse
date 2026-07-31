@@ -1,0 +1,26 @@
+# Environment variables and secrets
+.env
+*.env
+backend/app/.env
+
+# Databases
+*.db
+jobpulse.db
+
+# Python bytecode and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+env/
+venv/
+.venv/
+
+# Antigravity & IDE files
+.gemini/
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
