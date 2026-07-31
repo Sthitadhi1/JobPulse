@@ -1,51 +1,63 @@
+import re
 import httpx
-from typing import Dict, Any, Optional
-from backend.app.config import settings
+from typing import Optional, Dict, Any
 
-class TelegramNotifier:
+class TelegramNotificationService:
+    @staticmethod
+    def escape_markdown(text: str) -> str:
+        if not text:
+            return ""
+        # Telegram MarkdownV2 special characters
+        escape_chars = r'_*[]()~`>#+-=|{}.!'
+        return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
+
     @classmethod
-    def format_job_message(cls, job: Dict[str, Any], match_reason: Optional[str] = None) -> str:
-        company = job.get("company", "Company")
-        title = job.get("title", "Role")
-        location = job.get("location", "Location")
-        salary = job.get("salary_range", "Salary Disclosed on Application")
-        exp = job.get("experience_level", "Fresh Graduate")
-        url = job.get("url") or job.get("apply_url", "#")
-        source = job.get("source", "JobPulse")
+    def format_job_match_message(cls, job: Dict[str, Any], match_reasons: Optional[str] = None) -> str:
+        """
+        PART 10 — Telegram Notification Message Template
+        """
+        company = cls.escape_markdown(job.get("company", "Company"))
+        title = cls.escape_markdown(job.get("title", "Software Role"))
+        location = cls.escape_markdown(job.get("location", "India / Remote"))
+        exp = cls.escape_markdown(job.get("experience_level", "Fresher / 0-1 YOE"))
+        salary = cls.escape_markdown(job.get("salary_range", "Disclosed on Application"))
+        remote = cls.escape_markdown(job.get("remote_type", "Hybrid"))
+        
+        apply_target = job.get("external_apply_url") or job.get("job_url") or job.get("url") or "#"
+
+        reason_block = cls.escape_markdown(match_reasons) if match_reasons else "• Matched saved search criteria"
 
         msg = (
-            f"🚀 **New Job Opportunity Discovered!**\n\n"
-            f"🏢 **Company:** {company}\n"
-            f"💼 **Role:** {title}\n"
-            f"📍 **Location:** {location}\n"
-            f"💰 **Salary:** {salary}\n"
-            f"🎯 **Experience:** {exp}\n"
-            f"⚡ **Source:** {source}\n\n"
+            f"🚀 *New Job Match*\n\n"
+            f"*Company:* {company}\n"
+            f"*Role:* {title}\n"
+            f"*Location:* {location}\n"
+            f"*Experience:* {exp}\n"
+            f"*Salary:* {salary}\n"
+            f"*Remote:* {remote}\n\n"
+            f"*Matched because:*\n{reason_block}\n\n"
+            f"👉 [Apply Directly Listing]({apply_target})"
         )
-
-        if match_reason:
-            msg += f"💡 **Why it matched:**\n{match_reason}\n\n"
-
-        msg += f"🔗 [Apply Directly on Official Site]({url})\n\n"
-        msg += "_JobPulse — Human-in-the-loop Job Discovery Engine_"
         return msg
 
     @classmethod
-    async def send_message(cls, chat_id: str, message_text: str) -> bool:
-        if not settings.TELEGRAM_BOT_TOKEN or settings.TELEGRAM_BOT_TOKEN == "MOCK_TELEGRAM_BOT_TOKEN":
-            # Log simulated message in dev mode
-            print(f"[MOCK TELEGRAM DISPATCH] To Chat ID: {chat_id}\n{message_text}")
-            return True
+    async def send_job_notification(cls, bot_token: str, chat_id: str, job: Dict[str, Any], match_reasons: Optional[str] = None) -> bool:
+        if not bot_token or not chat_id:
+            return False
+
+        message_text = cls.format_job_match_message(job, match_reasons)
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+        payload = {
+            "chat_id": chat_id,
+            "text": message_text,
+            "parse_mode": "MarkdownV2",
+            "disable_web_page_preview": False
+        }
 
         try:
-            url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.post(url, json={
-                    "chat_id": chat_id,
-                    "text": message_text,
-                    "parse_mode": "Markdown"
-                })
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                res = await client.post(url, json=payload)
                 return res.status_code == 200
-        except Exception as e:
-            print(f"[TELEGRAM DISPATCH ERROR] {str(e)}")
+        except Exception:
             return False

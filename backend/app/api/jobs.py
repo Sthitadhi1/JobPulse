@@ -19,6 +19,7 @@ async def list_jobs(
     min_salary_lpa: Optional[float] = Query(None),
     company: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
+    source_type: Optional[str] = Query(None),
     bookmarked_only: Optional[bool] = Query(False),
     india_or_remote_only: Optional[bool] = Query(True, description="Default filter to India & Remote opportunities"),
     page: int = Query(1, ge=1),
@@ -72,6 +73,8 @@ async def list_jobs(
         stmt = stmt.where(Job.company.ilike(f"%{company}%"))
     if source:
         stmt = stmt.where(Job.source.ilike(f"%{source}%"))
+    if source_type:
+        stmt = stmt.where(Job.source_type.ilike(f"%{source_type}%"))
     if bookmarked_only:
         stmt = stmt.where(Job.is_bookmarked == True)
 
@@ -87,7 +90,7 @@ async def list_jobs(
     res = await db.execute(stmt)
     jobs = res.scalars().all()
 
-    # Format output
+    # Format output (PART 4 Schema Compliance)
     job_list = []
     for j in jobs:
         job_list.append({
@@ -101,8 +104,12 @@ async def list_jobs(
             "salary_range": j.salary_range,
             "min_salary_lpa": j.min_salary_lpa,
             "max_salary_lpa": j.max_salary_lpa,
-            "url": j.apply_url,
+            "job_url": j.job_url or j.apply_url,
+            "source_url": j.source_url or j.apply_url,
+            "external_apply_url": j.external_apply_url,
+            "url": j.external_apply_url or j.job_url or j.apply_url, # Apply Priority Target
             "source": j.source,
+            "source_type": j.source_type or "ATS",
             "tags": j.raw_tags.split(", ") if j.raw_tags else [],
             "description": j.description,
             "is_bookmarked": j.is_bookmarked,
@@ -143,8 +150,12 @@ async def get_job_detail(job_id: int, db: AsyncSession = Depends(get_db)):
             "salary_range": job.salary_range,
             "min_salary_lpa": job.min_salary_lpa,
             "max_salary_lpa": job.max_salary_lpa,
-            "url": job.apply_url,
+            "job_url": job.job_url or job.apply_url,
+            "source_url": job.source_url or job.apply_url,
+            "external_apply_url": job.external_apply_url,
+            "url": job.external_apply_url or job.job_url or job.apply_url,
             "source": job.source,
+            "source_type": job.source_type or "ATS",
             "tags": job.raw_tags.split(", ") if job.raw_tags else [],
             "description": job.description,
             "is_bookmarked": job.is_bookmarked,

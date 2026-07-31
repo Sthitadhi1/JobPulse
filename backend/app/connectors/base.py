@@ -25,10 +25,11 @@ class BaseConnector(ABC):
 
     def validate(self, job_dict: Dict[str, Any]) -> bool:
         """Validate required schema fields before normalization."""
-        required = ["title", "company", "location", "url"]
-        for field in required:
-            if not job_dict.get(field):
-                return False
+        if not job_dict.get("title") or not job_dict.get("company"):
+            return False
+        job_link = job_dict.get("job_url") or job_dict.get("url") or job_dict.get("apply_url")
+        if not job_link or job_link == "#":
+            return False
         return True
 
     async def health_check(self) -> Dict[str, Any]:

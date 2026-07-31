@@ -88,8 +88,8 @@
               <div class="filter-group">
                 <label>Experience:</label>
                 <select id="filter-exp">
-                  <option value="">All Experience Levels</option>
-                  <option value="Fresher" selected>Fresher / 0-1 YOE</option>
+                  <option value="" selected>All Experience Levels</option>
+                  <option value="Fresher">Fresher / 0-1 YOE</option>
                   <option value="2-4">2-4 YOE (Mid Level)</option>
                   <option value="4+">4+ YOE (High Exp / Senior)</option>
                 </select>
@@ -137,6 +137,11 @@
           <!-- Jobs Cards Container -->
           <div id="jobs-container" class="jobs-grid">
             <div class="loading-skeleton">Loading discovery feed...</div>
+          </div>
+
+          <div id="load-more-wrapper" style="text-align: center; margin: 25px 0;">
+            <button id="load-more-btn" class="btn btn-outline hidden">📥 Load More Jobs</button>
+            <div id="load-more-spinner" class="text-muted hidden" style="padding: 10px;">⚡ Auto-loading more opportunities...</div>
           </div>
         </section>
 
@@ -224,8 +229,14 @@
           </div>
 
           <div class="card card-padded max-w-xl">
-            <h3>Connect Telegram Bot</h3>
-            <p class="text-muted mb-4">Input your Telegram Chat ID below or use the default student test chat ID.</p>
+            <h3>Connect Telegram Bot & Account Linking</h3>
+            <p class="text-muted mb-4">Generate a secure token to link your Telegram account (`/start TOKEN`) or test dispatch with your Chat ID.</p>
+
+            <div class="button-row mb-4">
+              <button id="generate-tg-token-btn" class="btn btn-outline">🔑 Generate Linking Token</button>
+            </div>
+
+            <div id="telegram-token-display" class="hidden mb-4"></div>
 
             <div class="form-group">
               <label>Telegram Chat ID:</label>

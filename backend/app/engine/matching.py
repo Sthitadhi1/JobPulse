@@ -32,10 +32,33 @@ class MatchingEngine:
 
         # Mandatory Filter: Experience Level
         if search.experience_level:
-            if search.experience_level.lower() != job.experience_level.lower():
-                # Allow Fresh Graduate & 0-2 YOE to overlap
-                if not (search.experience_level in ["Fresh Graduate", "0-2 YOE"] and job.experience_level in ["Fresh Graduate", "0-2 YOE"]):
-                    return False, 0.0, []
+            exp_search = search.experience_level.lower()
+            exp_job = (job.experience_level or "").lower()
+            
+            fresher_terms = ["fresher", "fresh", "0-1", "entry", "internship", "0-2"]
+            mid_terms = ["2-4", "mid"]
+            high_terms = ["4+", "high", "senior"]
+
+            is_search_fresher = any(k in exp_search for k in fresher_terms)
+            is_job_fresher = any(k in exp_job for k in fresher_terms)
+
+            is_search_mid = any(k in exp_search for k in mid_terms)
+            is_job_mid = any(k in exp_job for k in mid_terms)
+
+            is_search_high = any(k in exp_search for k in high_terms)
+            is_job_high = any(k in exp_job for k in high_terms)
+
+            if is_search_fresher and is_job_fresher:
+                pass
+            elif is_search_mid and is_job_mid:
+                pass
+            elif is_search_high and is_job_high:
+                pass
+            elif exp_search in exp_job or exp_job in exp_search:
+                pass
+            else:
+                return False, 0.0, []
+
             reasons.append(f"Experience level: {job.experience_level}")
             score += 15.0
 
@@ -58,7 +81,6 @@ class MatchingEngine:
             if matched_keywords:
                 reasons.append(f"Matched keywords: {', '.join(set(matched_keywords))}")
             elif search.query and (" and " in search.query.lower()):
-                # Strict AND keyword failed
                 return False, 0.0, []
 
         return True, score, reasons

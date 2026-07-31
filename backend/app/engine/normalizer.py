@@ -1,5 +1,50 @@
 import re
 from typing import Dict, Any, Tuple, List, Optional
+from urllib.parse import urlparse, urljoin
+
+class URLNormalizerValidator:
+    GENERIC_HOMEPAGES = [
+        r"^https?://[^/]+/?$",
+        r"/careers/?$",
+        r"/jobs/?$",
+        r"/about/careers/?$",
+        r"/boards\.greenhouse\.io/[^/]+/?$",
+        r"/jobs\.lever\.co/[^/]+/?$",
+        r"/search/?$",
+        r"/results/?$"
+    ]
+
+    @classmethod
+    def resolve_and_validate_url(cls, raw_url: Optional[str], source_url: Optional[str] = None) -> Tuple[str, bool, bool]:
+        """
+        Resolves relative URLs to absolute URLs and validates individual job link.
+        Returns (clean_url, is_valid, was_relative_corrected)
+        """
+        if not raw_url or raw_url == "#":
+            return "#", False, False
+
+        clean_url = raw_url.strip()
+        was_relative = False
+
+        # Check if relative URL (starts with / or no scheme)
+        parsed = urlparse(clean_url)
+        if not parsed.scheme or not parsed.netloc:
+            if source_url and source_url != "#":
+                clean_url = urljoin(source_url, clean_url)
+                parsed = urlparse(clean_url)
+                was_relative = True
+            else:
+                return clean_url, False, False
+
+        if parsed.scheme not in ["http", "https"] or not parsed.netloc:
+            return clean_url, False, False
+
+        # Reject generic career homepages or search pages
+        for pattern in cls.GENERIC_HOMEPAGES:
+            if re.search(pattern, clean_url, re.IGNORECASE):
+                return clean_url, False, was_relative
+
+        return clean_url, True, was_relative
 
 class NormalizerEngine:
     EXPERIENCE_KEYWORDS = {
@@ -28,7 +73,7 @@ class NormalizerEngine:
             for pattern in patterns:
                 if re.search(r'\b' + pattern + r'\b', text):
                     return level
-        return "Fresh Graduate"
+        return "Fresher / 0-1 YOE"
 
     @classmethod
     def parse_salary(cls, salary_str: Optional[str], title: str) -> Tuple[Optional[str], Optional[float], Optional[float]]:
@@ -39,7 +84,6 @@ class NormalizerEngine:
 
         salary_clean = salary_str.strip()
         
-        # Match range e.g. "12 - 16 LPA" or "₹12 - ₹16 LPA"
         lpa_range = re.search(r'(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*(?:[₹$INR]+\s*)?(\d+(?:\.\d+)?)\s*(?:LPA|Lakh|Lakhs)', salary_clean, re.IGNORECASE)
         if lpa_range:
             min_sal = float(lpa_range.group(1))
@@ -67,30 +111,43 @@ class NormalizerEngine:
 
     @classmethod
     def normalize_job_data(cls, raw_job: Dict[str, Any]) -> Dict[str, Any]:
-        title = cls.normalize_title(raw_job.get("title", "Software Engineer"))
-        company = raw_job.get("company", "Tech Company").strip()
-        location = raw_job.get("location", "Remote / Hybrid").strip()
-        description = raw_job.get("description", "")
+        raw_title = raw_job.get("title", "")
+        raw_desc = raw_job.get("description", "")
         
-        exp_level = cls.detect_experience_level(title, description)
-        salary_fmt, min_sal, max_sal = cls.parse_salary(raw_job.get("salary"), title)
-        tags = cls.extract_tags(title, description)
+        norm_title = cls.normalize_title(raw_title)
+        exp_level = cls.detect_experience_level(norm_title, raw_desc)
+        salary_fmt, min_sal, max_sal = cls.parse_salary(raw_job.get("salary"), norm_title)
+        tags = cls.extract_tags(norm_title, raw_desc)
+
+        source_url = raw_job.get("source_url") or raw_job.get("url") or "#"
+        raw_job_url = raw_job.get("job_url") or raw_job.get("url") or "#"
+        raw_apply_url = raw_job.get("external_apply_url")
+
+        # Resolve & Validate job_url
+        clean_job_url, job_url_valid, _ = URLNormalizerValidator.resolve_and_validate_url(raw_job_url, source_url)
+        clean_apply_url, apply_url_valid, _ = URLNormalizerValidator.resolve_and_validate_url(raw_apply_url, source_url) if raw_apply_url else ("#", False, False)
+
+        final_job_url = clean_job_url if job_url_valid else (clean_apply_url if apply_url_valid else "#")
+        final_external_apply_url = clean_apply_url if apply_url_valid else None
 
         return {
             "external_job_id": raw_job.get("external_job_id"),
-            "title": title,
-            "company": company,
-            "location": location,
+            "title": norm_title,
+            "company": raw_job.get("company", "Unknown"),
+            "location": raw_job.get("location", "India / Remote"),
             "remote_type": raw_job.get("remote_type", "Hybrid"),
             "employment_type": raw_job.get("employment_type", "Full-time"),
             "experience_level": exp_level,
             "salary_range": salary_fmt,
             "min_salary_lpa": min_sal,
             "max_salary_lpa": max_sal,
-            "apply_url": raw_job.get("url", "#"),
-            "canonical_url": raw_job.get("url", "#"),
+            "job_url": final_job_url,
+            "source_url": source_url,
+            "external_apply_url": final_external_apply_url,
+            "apply_url": final_external_apply_url or final_job_url,
+            "canonical_url": final_job_url,
             "source": raw_job.get("source", "Connector"),
             "source_type": raw_job.get("source_type", "ATS"),
             "raw_tags": ", ".join(tags),
-            "description": description
+            "description": raw_desc
         }

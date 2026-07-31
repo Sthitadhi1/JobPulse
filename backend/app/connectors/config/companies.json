@@ -1,0 +1,230 @@
+[
+  {
+    "company_id": "google",
+    "name": "Google",
+    "category": "Tech Giant",
+    "ats_type": "custom",
+    "career_url": "https://www.google.com/about/careers/applications/jobs/results/",
+    "sample_roles": [
+      {
+        "external_job_id": "goog-sde-101",
+        "title": "Software Engineer I (Early Career)",
+        "location": "Bengaluru, Karnataka, India",
+        "remote_type": "On-site",
+        "job_url": "https://www.google.com/about/careers/applications/jobs/results/?location=India",
+        "external_apply_url": "https://www.google.com/about/careers/applications/jobs/results/?location=India",
+        "salary": "₹18 - ₹28 LPA",
+        "description": "Building large-scale distributed systems, C++, Java, Python, Golang."
+      }
+    ]
+  },
+  {
+    "company_id": "microsoft",
+    "name": "Microsoft",
+    "category": "Tech Giant",
+    "ats_type": "custom",
+    "career_url": "https://careers.microsoft.com/",
+    "sample_roles": [
+      {
+        "external_job_id": "msft-sde-102",
+        "title": "Software Engineer (SDE 1)",
+        "location": "Hyderabad / Bengaluru, India",
+        "remote_type": "Hybrid",
+        "job_url": "https://careers.microsoft.com/v2/global/en/search?lc=India",
+        "external_apply_url": "https://careers.microsoft.com/v2/global/en/search?lc=India",
+        "salary": "₹16 - ₹24 LPA",
+        "description": "Azure Cloud platform microservices, C#, .NET Core, React, TypeScript."
+      }
+    ]
+  },
+  {
+    "company_id": "amazon",
+    "name": "Amazon",
+    "category": "Tech Giant",
+    "ats_type": "custom",
+    "career_url": "https://www.amazon.jobs/",
+    "sample_roles": [
+      {
+        "external_job_id": "amzn-sde-103",
+        "title": "Software Development Engineer I (SDE I)",
+        "location": "Bengaluru / Hyderabad, India",
+        "remote_type": "Hybrid",
+        "job_url": "https://www.amazon.jobs/en/search?base_query=software&loc_query=India",
+        "external_apply_url": "https://www.amazon.jobs/en/search?base_query=software&loc_query=India",
+        "salary": "₹16 - ₹26 LPA",
+        "description": "AWS infrastructure services, distributed databases, Java, AWS Lambda, DynamoDB."
+      }
+    ]
+  },
+  {
+    "company_id": "uber",
+    "name": "Uber",
+    "category": "MNC",
+    "ats_type": "custom",
+    "career_url": "https://www.uber.com/us/en/careers/",
+    "sample_roles": [
+      {
+        "external_job_id": "uber-sde-104",
+        "title": "Software Engineer I - Mobility Tech",
+        "location": "Bengaluru, Karnataka, India",
+        "remote_type": "Hybrid",
+        "job_url": "https://www.uber.com/us/en/careers/list/?location=IND--Bengaluru",
+        "external_apply_url": "https://www.uber.com/us/en/careers/list/?location=IND--Bengaluru",
+        "salary": "₹18 - ₹26 LPA",
+        "description": "Rider & driver dispatch engine, Go, Java, Kafka, Microservices."
+      }
+    ]
+  },
+  {
+    "company_id": "swiggy",
+    "name": "Swiggy",
+    "category": "Indian Unicorn",
+    "ats_type": "custom",
+    "career_url": "https://careers.swiggy.com/",
+    "sample_roles": [
+      {
+        "external_job_id": "swiggy-sde-105",
+        "title": "SDE I - Backend Engineering",
+        "location": "Bengaluru, India",
+        "remote_type": "Hybrid",
+        "job_url": "https://careers.swiggy.com/",
+        "external_apply_url": "https://careers.swiggy.com/",
+        "salary": "₹14 - ₹18 LPA",
+        "description": "Food delivery logistics routing engines, Golang, Redis, AWS."
+      }
+    ]
+  },
+  {
+    "company_id": "zomato",
+    "name": "Zomato",
+    "category": "Indian Unicorn",
+    "ats_type": "custom",
+    "career_url": "https://www.zomato.com/careers",
+    "sample_roles": [
+      {
+        "external_job_id": "zomato-sde-106",
+        "title": "Software Engineer - Full Stack",
+        "location": "Gurugram, Haryana, India",
+        "remote_type": "On-site",
+        "job_url": "https://www.zomato.com/careers",
+        "external_apply_url": "https://www.zomato.com/careers",
+        "salary": "₹14 - ₹19 LPA",
+        "description": "Consumer web & mobile app features, React, Node.js, PHP, MySQL."
+      }
+    ]
+  },
+  {
+    "company_id": "razorpay",
+    "name": "Razorpay",
+    "category": "Indian Unicorn",
+    "ats_type": "custom",
+    "career_url": "https://razorpay.com/jobs/",
+    "sample_roles": [
+      {
+        "external_job_id": "rzp-sde-107",
+        "title": "Software Development Engineer 1 (SDE I)",
+        "location": "Bengaluru, India",
+        "remote_type": "On-site",
+        "job_url": "https://razorpay.com/jobs/",
+        "external_apply_url": "https://razorpay.com/jobs/",
+        "salary": "₹13 - ₹17 LPA",
+        "description": "Payment gateway processing system, Go, PHP, Microservices, MySQL."
+      }
+    ]
+  },
+  {
+    "company_id": "phonepe",
+    "name": "PhonePe",
+    "category": "Indian Unicorn",
+    "ats_type": "custom",
+    "career_url": "https://phonepe.com/careers/",
+    "sample_roles": [
+      {
+        "external_job_id": "ppe-sde-108",
+        "title": "Associate Backend Engineer - UPI Platforms",
+        "location": "Bengaluru / Pune, India",
+        "remote_type": "Hybrid",
+        "job_url": "https://phonepe.com/careers/",
+        "external_apply_url": "https://phonepe.com/careers/",
+        "salary": "₹12 - ₹16 LPA",
+        "description": "UPI payment settlement platform, Java, Spring Boot, Cassandra, Kafka."
+      }
+    ]
+  },
+  {
+    "company_id": "cred",
+    "name": "CRED",
+    "category": "Indian Unicorn",
+    "ats_type": "custom",
+    "career_url": "https://cred.club/careers",
+    "sample_roles": [
+      {
+        "external_job_id": "cred-ai-109",
+        "title": "Junior AI & Data Engineer",
+        "location": "Bengaluru, India",
+        "remote_type": "On-site",
+        "job_url": "https://cred.club/careers",
+        "external_apply_url": "https://cred.club/careers",
+        "salary": "₹16 - ₹22 LPA",
+        "description": "Real-time risk evaluation engine, Python, PyTorch, Snowflake, Kafka."
+      }
+    ]
+  },
+  {
+    "company_id": "meesho",
+    "name": "Meesho",
+    "category": "Indian Unicorn",
+    "ats_type": "custom",
+    "career_url": "https://meesho.io/careers",
+    "sample_roles": [
+      {
+        "external_job_id": "meesho-sde-110",
+        "title": "Software Development Engineer - Backend",
+        "location": "Bengaluru / Remote",
+        "remote_type": "Remote",
+        "job_url": "https://meesho.io/careers",
+        "external_apply_url": "https://meesho.io/careers",
+        "salary": "₹13 - ₹18 LPA",
+        "description": "Seller portal microservices, Java, Spring Boot, MySQL, Redis."
+      }
+    ]
+  },
+  {
+    "company_id": "postman",
+    "name": "Postman",
+    "category": "Developer Tools",
+    "ats_type": "lever",
+    "career_url": "https://www.postman.com/careers/",
+    "sample_roles": [
+      {
+        "external_job_id": "post-dev-111",
+        "title": "Associate Software Engineer - API Platform",
+        "location": "Bengaluru, India / Remote",
+        "remote_type": "Remote",
+        "job_url": "https://jobs.lever.co/postman",
+        "external_apply_url": "https://jobs.lever.co/postman",
+        "salary": "₹14 - ₹19 LPA",
+        "description": "API workspace tools, TypeScript, Node.js, Electron, React."
+      }
+    ]
+  },
+  {
+    "company_id": "browserstack",
+    "name": "BrowserStack",
+    "category": "Developer Tools",
+    "ats_type": "lever",
+    "career_url": "https://www.browserstack.com/careers",
+    "sample_roles": [
+      {
+        "external_job_id": "bs-sde-112",
+        "title": "Software Engineer I - Infrastructure",
+        "location": "Mumbai / Remote",
+        "remote_type": "Remote",
+        "job_url": "https://jobs.lever.co/browserstack",
+        "external_apply_url": "https://jobs.lever.co/browserstack",
+        "salary": "₹15 - ₹20 LPA",
+        "description": "Real-time browser testing cloud, Ruby on Rails, C++, Docker, Linux."
+      }
+    ]
+  }
+]

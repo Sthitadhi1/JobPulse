@@ -7,12 +7,27 @@ from backend.app.models.job import Job
 
 class DeduplicatorEngine:
     @staticmethod
-    def generate_fingerprint(company: str, title: str, location: str) -> str:
+    def generate_fingerprint(job: Dict[str, Any]) -> str:
+        ext_id = job.get("external_job_id")
+        job_url = job.get("job_url") or job.get("apply_url") or ""
+        company = job.get("company", "")
+        title = job.get("title", "")
+        location = job.get("location", "")
+
         clean_company = re.sub(r'[^a-z0-9]', '', company.lower())
         clean_title = re.sub(r'[^a-z0-9]', '', title.lower())
         clean_loc = re.sub(r'[^a-z0-9]', '', location.lower())
 
-        raw_str = f"{clean_company}:{clean_title}:{clean_loc}"
+        if ext_id and str(ext_id).strip():
+            raw_str = f"ext:{company.lower()}:{str(ext_id).strip()}"
+        elif job_url and job_url != "#":
+            clean_url = re.sub(r'^https?://', '', job_url.lower()).strip('/')
+            raw_str = f"url:{clean_url}"
+        elif clean_company and clean_title:
+            raw_str = f"comp_title:{clean_company}:{clean_title}:{clean_loc}"
+        else:
+            raw_str = f"full:{clean_company}:{clean_title}:{clean_loc}"
+
         return hashlib.sha256(raw_str.encode('utf-8')).hexdigest()
 
     @classmethod
@@ -23,7 +38,7 @@ class DeduplicatorEngine:
         prepared_jobs = []
         fingerprints = []
         for job in jobs_data:
-            fp = cls.generate_fingerprint(job["company"], job["title"], job["location"])
+            fp = cls.generate_fingerprint(job)
             job["hash_signature"] = fp
             prepared_jobs.append(job)
             fingerprints.append(fp)

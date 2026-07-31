@@ -3,6 +3,11 @@ const API_BASE = '/api/v1';
 let currentJobs = [];
 let isBookmarkedOnlyFilter = false;
 
+let currentFeedPage = 1;
+let totalFeedPages = 1;
+let totalFeedRecords = 0;
+let isLoadingMoreFeed = false;
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initNavigation();
@@ -10,9 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initSearchAndFilters();
   initModals();
   initTelegramView();
+  initInfiniteScroll();
   
   // Initial data load
-  loadJobsFeed();
+  loadJobsFeed(true);
   loadAnalytics();
 });
 
@@ -47,7 +53,7 @@ function initNavigation() {
       if (targetPane) targetPane.classList.add('active');
 
       // Load tab-specific data
-      if (tabTarget === 'jobs') loadJobsFeed();
+      if (tabTarget === 'jobs') loadJobsFeed(true);
       if (tabTarget === 'searches') loadSavedSearches();
       if (tabTarget === 'bookmarks') loadBookmarksFeed();
       if (tabTarget === 'analytics') loadAnalytics();
@@ -55,40 +61,111 @@ function initNavigation() {
     });
   });
 
-  // Sync button in header & connector panel
   document.getElementById('sync-now-btn')?.addEventListener('click', triggerManualSync);
   document.getElementById('trigger-sync-panel-btn')?.addEventListener('click', triggerManualSync);
 }
 
-/* JOBS FEED & API FETCHING */
-async function loadJobsFeed() {
+/* JOBS FEED & INFINITE SCROLL PAGINATION (BUG 1 FIX) */
+async function loadJobsFeed(reset = true) {
   const container = document.getElementById('jobs-container');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  const loadMoreSpinner = document.getElementById('load-more-spinner');
+
+  if (reset) {
+    currentFeedPage = 1;
+    currentJobs = [];
+    container.innerHTML = '<div class="loading-skeleton">Loading live discovery feed...</div>';
+  }
+
   const q = document.getElementById('job-search-input').value.trim();
   const exp = document.getElementById('filter-exp').value;
   const remote = document.getElementById('filter-remote').value;
   const minSal = document.getElementById('filter-salary').value;
 
-  let url = `${API_BASE}/jobs?limit=50&india_or_remote_only=true`;
+  let url = `${API_BASE}/jobs?page=${currentFeedPage}&limit=30&india_or_remote_only=true`;
   if (q) url += `&q=${encodeURIComponent(q)}`;
   if (exp) url += `&experience_level=${encodeURIComponent(exp)}`;
   if (remote) url += `&remote_type=${encodeURIComponent(remote)}`;
   if (minSal) url += `&min_salary_lpa=${encodeURIComponent(minSal)}`;
   if (isBookmarkedOnlyFilter) url += `&bookmarked_only=true`;
 
-  container.innerHTML = '<div class="loading-skeleton">Loading live discovery feed...</div>';
+  isLoadingMoreFeed = true;
+  if (loadMoreSpinner) loadMoreSpinner.classList.remove('hidden');
 
   try {
     const res = await fetch(url);
     const result = await res.json();
 
     if (result.success && result.data) {
-      currentJobs = result.data;
+      if (reset) {
+        currentJobs = result.data;
+      } else {
+        currentJobs = currentJobs.concat(result.data);
+      }
+
+      totalFeedRecords = result.meta.total_records || currentJobs.length;
+      totalFeedPages = result.meta.total_pages || 1;
+
       renderJobsGrid(container, currentJobs);
-      document.getElementById('job-count-badge').textContent = `${result.meta.total_records} jobs found`;
+
+      const countBadge = document.getElementById('job-count-badge');
+      if (countBadge) {
+        countBadge.textContent = `Showing 1–${currentJobs.length} of ${totalFeedRecords} jobs`;
+      }
+
+      if (loadMoreBtn) {
+        if (currentFeedPage < totalFeedPages) {
+          loadMoreBtn.classList.remove('hidden');
+          loadMoreBtn.textContent = `📥 Load More Jobs (${totalFeedRecords - currentJobs.length} remaining)`;
+        } else {
+          loadMoreBtn.classList.add('hidden');
+        }
+      }
     }
   } catch (err) {
-    container.innerHTML = `<div class="card card-padded text-muted">Error loading jobs feed: ${err.message}</div>`;
+    if (reset) {
+      container.innerHTML = `<div class="card card-padded text-muted">Error loading jobs feed: ${err.message}</div>`;
+    }
+  } finally {
+    isLoadingMoreFeed = false;
+    if (loadMoreSpinner) loadMoreSpinner.classList.add('hidden');
   }
+}
+
+async function loadNextFeedPage() {
+  if (isLoadingMoreFeed || currentFeedPage >= totalFeedPages) return;
+  currentFeedPage++;
+  await loadJobsFeed(false);
+}
+
+function initInfiniteScroll() {
+  const contentArea = document.querySelector('.content-area');
+
+  const handleScroll = (targetEl) => {
+    const activeTab = document.querySelector('.tab-pane.active');
+    if (!activeTab || activeTab.id !== 'tab-jobs') return;
+
+    const scrollBottom = targetEl.scrollHeight - (targetEl.scrollTop + targetEl.clientHeight);
+    if (scrollBottom < 500) {
+      loadNextFeedPage();
+    }
+  };
+
+  if (contentArea) {
+    contentArea.addEventListener('scroll', () => handleScroll(contentArea));
+  }
+
+  window.addEventListener('scroll', () => {
+    const activeTab = document.querySelector('.tab-pane.active');
+    if (!activeTab || activeTab.id !== 'tab-jobs') return;
+
+    if ((window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 500)) {
+      loadNextFeedPage();
+    }
+  });
+
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  loadMoreBtn?.addEventListener('click', loadNextFeedPage);
 }
 
 function renderJobsGrid(container, jobs) {
@@ -101,94 +178,123 @@ function renderJobsGrid(container, jobs) {
     return;
   }
 
-  container.innerHTML = jobs.map(job => `
-    <div class="job-card" data-id="${job.id}">
-      <div>
+  container.innerHTML = jobs.map(job => {
+    // PART 5 — Apply Button Resolution Priority:
+    // external_apply_url -> job_url -> url. Never open source_url.
+    const applyTarget = job.external_apply_url || job.job_url || (job.url !== '#' ? job.url : null);
+    
+    // PART 6 — Source Badges
+    const sourceType = (job.source_type || 'ATS').toLowerCase();
+    let badgeClass = 'badge-source-ats';
+    if (sourceType.includes('board')) badgeClass = 'badge-source-board';
+    if (sourceType.includes('company')) badgeClass = 'badge-source-company';
+
+    const applyButtonHtml = applyTarget ? `
+      <a href="${applyTarget}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">
+        Apply Listing ↗
+      </a>` : `
+      <button class="btn btn-sm btn-outline btn-disabled" disabled>
+        Application link unavailable
+      </button>`;
+
+    return `
+      <div class="job-card card">
         <div class="job-card-header">
-          <span class="job-company">${escapeHtml(job.company)}</span>
-          <button class="btn btn-sm btn-ghost bookmark-btn" onclick="toggleBookmark(${job.id})">
-            ${job.is_bookmarked ? '⭐ Bookmarked' : '☆ Bookmark'}
+          <div>
+            <div class="company-row">
+              <span class="company-name">${escapeHtml(job.company)}</span>
+              <span class="badge-source ${badgeClass}">${job.source_type || 'ATS'}</span>
+            </div>
+            <h3 class="job-title">${escapeHtml(job.title)}</h3>
+          </div>
+          <button class="bookmark-btn ${job.is_bookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${job.id}, this)">
+            ${job.is_bookmarked ? '⭐' : '☆'}
           </button>
         </div>
-        <h3 class="job-title">${escapeHtml(job.title)}</h3>
-        <p class="text-muted text-sm mt-1">📍 ${escapeHtml(job.location)}</p>
 
-        <div class="job-meta-pills mt-3">
-          <span class="pill pill-salary">${job.salary_range || 'Disclosed'}</span>
-          <span class="pill pill-exp">${job.experience_level}</span>
-          <span class="pill">${job.remote_type}</span>
-          <span class="pill">${job.employment_type}</span>
+        <div class="job-details">
+          <span class="detail-item">📍 ${escapeHtml(job.location)}</span>
+          <span class="detail-item">🏠 ${escapeHtml(job.remote_type || 'Hybrid')}</span>
+          <span class="detail-item">💼 ${escapeHtml(job.experience_level || 'Fresher')}</span>
+          <span class="detail-item">💰 ${escapeHtml(job.salary_range || 'Disclosed on App')}</span>
         </div>
-      </div>
 
-      <div>
-        <p class="text-sm text-muted line-clamp-2 mt-2">${escapeHtml(job.description || '')}</p>
-        <div class="job-card-footer mt-3">
-          <span class="source-tag">Source: ${job.source}</span>
-          <div class="btn-actions">
-            <a href="${job.url}" target="_blank" class="btn btn-sm btn-primary">Apply Official Site ↗</a>
+        <div class="job-tags">
+          ${(job.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+        </div>
+
+        <div class="job-card-footer">
+          <small class="posted-date">Via ${escapeHtml(job.source)} • ${formatDate(job.posted_at)}</small>
+          <div class="action-buttons">
+            <button class="btn btn-sm btn-ghost" onclick="copyJobLink('${escapeHtml(applyTarget || '')}')" title="Copy listing URL">
+              🔗 Share
+            </button>
+            ${applyButtonHtml}
           </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
-/* BOOKMARKS TOGGLE */
-async function toggleBookmark(jobId) {
+function formatDate(isoStr) {
+  if (!isoStr) return 'Recently';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  })[m]);
+}
+
+function copyJobLink(url) {
+  if (!url) return alert('Application URL unavailable.');
+  navigator.clipboard.writeText(url);
+  alert('Job link copied to clipboard!');
+}
+
+/* BOOKMARK TOGGLING */
+async function toggleBookmark(jobId, btnEl) {
   try {
     const res = await fetch(`${API_BASE}/jobs/${jobId}/bookmark`, { method: 'POST' });
     const result = await res.json();
     if (result.success) {
-      loadJobsFeed();
+      const isBookmarked = result.data.is_bookmarked;
+      btnEl.classList.toggle('bookmarked', isBookmarked);
+      btnEl.textContent = isBookmarked ? '⭐' : '☆';
     }
   } catch (err) {
     console.error('Bookmark error:', err);
   }
 }
 
-async function loadBookmarksFeed() {
-  isBookmarkedOnlyFilter = true;
-  const container = document.getElementById('bookmarks-container');
-  container.innerHTML = '<div class="loading-skeleton">Loading bookmarks...</div>';
-
-  try {
-    const res = await fetch(`${API_BASE}/jobs?bookmarked_only=true`);
-    const result = await res.json();
-    if (result.success) {
-      renderJobsGrid(container, result.data);
-    }
-  } catch (err) {
-    container.innerHTML = `<div class="card card-padded">Error loading bookmarks.</div>`;
-  } finally {
-    isBookmarkedOnlyFilter = false;
-  }
-}
-
-/* SAVED SEARCHES */
+/* SAVED SEARCHES VIEW */
 async function loadSavedSearches() {
   const container = document.getElementById('searches-container');
   container.innerHTML = '<div class="loading-skeleton">Loading saved search rules...</div>';
 
   try {
-    const res = await fetch(`${API_BASE}/search/saved`);
+    const res = await fetch(`${API_BASE}/searches`);
     const result = await res.json();
 
     if (result.success && result.data) {
       if (result.data.length === 0) {
-        container.innerHTML = `<div class="card card-padded text-muted">No saved search alerts created yet. Create one to receive automatic Telegram notifications!</div>`;
+        container.innerHTML = `<div class="card card-padded text-center">No saved search alerts created yet.</div>`;
         return;
       }
 
       container.innerHTML = `
-        <table>
+        <table class="data-table">
           <thead>
             <tr>
-              <th>Alert Name</th>
-              <th>Keywords / Query</th>
+              <th>Rule Name</th>
+              <th>Query Keywords</th>
               <th>Location</th>
-              <th>Min Salary</th>
               <th>Exp Level</th>
+              <th>Min Salary</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -197,20 +303,13 @@ async function loadSavedSearches() {
             ${result.data.map(s => `
               <tr>
                 <td><strong>${escapeHtml(s.name)}</strong></td>
-                <td><code>${escapeHtml(s.query || s.keywords || 'All')}</code></td>
-                <td>${s.location || 'Any'}</td>
-                <td>${s.min_salary_lpa ? '₹' + s.min_salary_lpa + ' LPA' : 'Any'}</td>
-                <td>${s.experience_level || 'All'}</td>
+                <td><code>${escapeHtml(s.query || s.keywords || 'Any')}</code></td>
+                <td>${escapeHtml(s.location || 'Any')}</td>
+                <td>${escapeHtml(s.experience_level || 'Any')}</td>
+                <td>${s.min_salary_lpa ? `₹${s.min_salary_lpa} LPA` : 'Any'}</td>
+                <td><span class="badge badge-pulse">Active</span></td>
                 <td>
-                  <span class="badge ${s.is_active ? 'badge-pulse' : ''}">
-                    ${s.is_active ? 'ACTIVE' : 'PAUSED'}
-                  </span>
-                </td>
-                <td>
-                  <button class="btn btn-sm btn-outline" onclick="toggleSearchRule(${s.id})">
-                    ${s.is_active ? 'Pause' : 'Activate'}
-                  </button>
-                  <button class="btn btn-sm btn-ghost" onclick="deleteSearchRule(${s.id})">Delete</button>
+                  <button class="btn btn-sm btn-outline" onclick="deleteSavedSearch(${s.id})">Delete</button>
                 </td>
               </tr>
             `).join('')}
@@ -219,54 +318,48 @@ async function loadSavedSearches() {
       `;
     }
   } catch (err) {
-    container.innerHTML = `<div class="card card-padded">Failed to load saved searches.</div>`;
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading saved searches.</div>`;
   }
 }
 
-async function toggleSearchRule(id) {
-  await fetch(`${API_BASE}/search/saved/${id}/toggle`, { method: 'PATCH' });
-  loadSavedSearches();
-}
-
-async function deleteSearchRule(id) {
-  if (confirm('Delete this saved search alert?')) {
-    await fetch(`${API_BASE}/search/saved/${id}`, { method: 'DELETE' });
+async function deleteSavedSearch(id) {
+  if (!confirm('Delete this saved search rule?')) return;
+  try {
+    await fetch(`${API_BASE}/searches/${id}`, { method: 'DELETE' });
     loadSavedSearches();
+  } catch (err) {
+    alert('Delete error: ' + err.message);
   }
 }
 
-/* ANALYTICS */
+/* BOOKMARKS FEED VIEW */
+async function loadBookmarksFeed() {
+  const container = document.getElementById('jobs-container');
+  isBookmarkedOnlyFilter = true;
+  loadJobsFeed(true);
+}
+
+/* ANALYTICS VIEW */
 async function loadAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/analytics/dashboard`);
+    const res = await fetch(`${API_BASE}/analytics/summary`);
     const result = await res.json();
-
-    if (result.success && result.data) {
-      const d = result.data;
-      document.getElementById('stat-jobs-today').textContent = d.jobs_discovered_today || 0;
-      document.getElementById('stat-searches').textContent = d.active_saved_searches || 0;
-      document.getElementById('stat-notifs').textContent = d.notifications_sent || 0;
-      document.getElementById('stat-companies').textContent = d.companies_tracked || 0;
-
-      const topList = document.getElementById('top-companies-list');
-      if (topList && d.top_hiring_companies) {
-        topList.innerHTML = d.top_hiring_companies.map(c => `
-          <li style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-color)">
-            <span>🏢 ${escapeHtml(c.company)}</span>
-            <strong>${c.count} active roles</strong>
-          </li>
-        `).join('');
-      }
+    if (result.success) {
+      const data = result.data;
+      document.getElementById('stat-total-jobs').textContent = data.total_jobs || 0;
+      document.getElementById('stat-remote-jobs').textContent = data.remote_jobs || 0;
+      document.getElementById('stat-fresher-jobs').textContent = data.fresher_jobs || 0;
+      document.getElementById('stat-avg-salary').textContent = `₹${data.avg_min_salary_lpa || 12} LPA`;
     }
   } catch (err) {
     console.error('Analytics error:', err);
   }
 }
 
-/* CONNECTOR HEALTH & SYNC */
+/* CONNECTOR HEALTH & DIAGNOSTICS VIEW */
 async function loadConnectorHealth() {
   const container = document.getElementById('connectors-container');
-  container.innerHTML = '<div class="loading-skeleton">Loading connector diagnostics...</div>';
+  container.innerHTML = '<div class="loading-skeleton">Loading connector status...</div>';
 
   try {
     const res = await fetch(`${API_BASE}/admin/connectors`);
@@ -274,12 +367,13 @@ async function loadConnectorHealth() {
 
     if (result.success && result.data) {
       container.innerHTML = `
-        <table>
+        <table class="data-table">
           <thead>
             <tr>
               <th>Connector Name</th>
               <th>Source Type</th>
-              <th>Status</th>
+              <th>Health Status</th>
+              <th>Success Rate</th>
               <th>Jobs Last Run</th>
               <th>Total Indexed</th>
               <th>Avg Runtime</th>
@@ -290,11 +384,12 @@ async function loadConnectorHealth() {
             ${result.data.map(c => `
               <tr>
                 <td><strong>${escapeHtml(c.name)}</strong></td>
-                <td>${c.source_type}</td>
-                <td><span class="badge badge-pulse">${c.status}</span></td>
+                <td><span class="badge-source badge-source-${(c.source_type || 'ats').toLowerCase()}">${c.source_type}</span></td>
+                <td><span class="badge ${c.health_score === 'HEALTHY' ? 'badge-pulse' : 'badge-danger'}">${c.health_score || c.status}</span></td>
+                <td><strong>${c.success_rate || 100}%</strong></td>
                 <td>${c.jobs_found_last_run}</td>
                 <td>${c.total_jobs_indexed}</td>
-                <td>${c.average_runtime_ms} ms</td>
+                <td><strong>${c.average_runtime_ms} ms</strong></td>
                 <td>${c.last_run ? new Date(c.last_run).toLocaleTimeString() : 'Never'}</td>
               </tr>
             `).join('')}
@@ -315,7 +410,7 @@ async function triggerManualSync() {
     const res = await fetch(`${API_BASE}/admin/connectors/sync`, { method: 'POST' });
     const result = await res.json();
     if (result.success) {
-      loadJobsFeed();
+      loadJobsFeed(true);
       loadAnalytics();
       alert(`Sync Complete! Discovered ${result.data.new_unique_jobs_added} new roles across connectors.`);
     }
@@ -326,17 +421,37 @@ async function triggerManualSync() {
   }
 }
 
-/* TELEGRAM TEST VIEW */
+/* TELEGRAM DEEP LINKING VIEW */
 function initTelegramView() {
-  const btn = document.getElementById('send-telegram-test-btn');
+  const testBtn = document.getElementById('send-telegram-test-btn');
+  const generateTokenBtn = document.getElementById('generate-tg-token-btn');
   const chatInput = document.getElementById('telegram-chat-id-input');
   const resultAlert = document.getElementById('telegram-test-result');
+  const tokenDisplay = document.getElementById('telegram-token-display');
 
-  btn.addEventListener('click', async () => {
+  generateTokenBtn?.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`${API_BASE}/notifications/telegram/token`, { method: 'POST' });
+      const result = await res.json();
+      if (result.success) {
+        tokenDisplay.classList.remove('hidden');
+        tokenDisplay.innerHTML = `
+          <div style="background: var(--bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 10px;">
+            <strong>Linking Token:</strong> <code>${result.token}</code><br>
+            <small class="text-muted">${result.instructions}</small>
+          </div>
+        `;
+      }
+    } catch (err) {
+      alert('Token generation failed: ' + err.message);
+    }
+  });
+
+  testBtn?.addEventListener('click', async () => {
     const chatId = chatInput.value.trim();
-    if (!chatId) return;
+    if (!chatId) return alert('Please enter a Telegram Chat ID.');
 
-    btn.textContent = 'Sending...';
+    testBtn.textContent = 'Sending...';
     try {
       const res = await fetch(`${API_BASE}/notifications/telegram/test`, {
         method: 'POST',
@@ -345,28 +460,28 @@ function initTelegramView() {
       });
       const result = await res.json();
       resultAlert.classList.remove('hidden');
-      resultAlert.textContent = result.message + ' (Check backend terminal for simulated dispatch logs).';
+      resultAlert.textContent = result.message + ' (Formatted MarkdownV2 payload generated).';
     } catch (err) {
       resultAlert.classList.remove('hidden');
       resultAlert.textContent = 'Dispatch failed: ' + err.message;
     } finally {
-      btn.textContent = '⚡ Send Test Alert';
+      testBtn.textContent = '⚡ Send Test Alert';
     }
   });
 }
 
 /* SEARCH & FILTERS CONTROLS */
 function initSearchAndFilters() {
-  document.getElementById('run-search-btn').addEventListener('click', () => loadJobsFeed());
-  document.getElementById('filter-exp').addEventListener('change', () => loadJobsFeed());
-  document.getElementById('filter-remote').addEventListener('change', () => loadJobsFeed());
-  document.getElementById('filter-salary').addEventListener('change', () => loadJobsFeed());
+  document.getElementById('run-search-btn').addEventListener('click', () => loadJobsFeed(true));
+  document.getElementById('filter-exp').addEventListener('change', () => loadJobsFeed(true));
+  document.getElementById('filter-remote').addEventListener('change', () => loadJobsFeed(true));
+  document.getElementById('filter-salary').addEventListener('change', () => loadJobsFeed(true));
   
   document.getElementById('bookmarked-only-btn').addEventListener('click', () => {
     isBookmarkedOnlyFilter = !isBookmarkedOnlyFilter;
     const btn = document.getElementById('bookmarked-only-btn');
     btn.classList.toggle('btn-primary', isBookmarkedOnlyFilter);
-    loadJobsFeed();
+    loadJobsFeed(true);
   });
 }
 
@@ -392,24 +507,26 @@ function initModals() {
   closeBtn?.addEventListener('click', closeModal);
   cancelBtn?.addEventListener('click', closeModal);
 
-  confirmBtn.addEventListener('click', async () => {
-    const name = document.getElementById('modal-search-name').value;
-    const query = document.getElementById('modal-search-query').value;
-    const loc = document.getElementById('modal-search-location').value;
-    const sal = document.getElementById('modal-search-salary').value;
+  confirmBtn?.addEventListener('click', async () => {
+    const name = document.getElementById('modal-search-name').value.trim();
+    const query = document.getElementById('modal-search-query').value.trim();
+    const exp = document.getElementById('filter-exp').value;
+    const remote = document.getElementById('filter-remote').value;
+    const minSal = document.getElementById('filter-salary').value;
 
-    if (!name) return alert('Please enter an alert name.');
+    if (!name) return alert('Please provide a name for this search rule.');
 
     try {
-      const res = await fetch(`${API_BASE}/search/saved`, {
+      const res = await fetch(`${API_BASE}/searches`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name,
           query: query,
-          location: loc,
-          min_salary_lpa: sal ? parseFloat(sal) : null,
-          experience_level: "Fresh Graduate"
+          keywords: query,
+          experience_level: exp || null,
+          remote_type: remote || null,
+          min_salary_lpa: minSal ? parseFloat(minSal) : null
         })
       });
       const result = await res.json();
@@ -418,55 +535,57 @@ function initModals() {
         alert('Saved search alert created successfully!');
       }
     } catch (err) {
-      alert('Error saving search rule: ' + err.message);
+      alert('Failed to save search: ' + err.message);
     }
   });
 }
 
 function initCommandPalette() {
-  const modal = document.getElementById('cmd-k-modal');
-  const triggerBtn = document.getElementById('cmd-k-btn');
-  const input = document.getElementById('cmd-k-input');
+  const palette = document.getElementById('command-palette');
+  const input = document.getElementById('cmd-input');
+  const list = document.getElementById('cmd-results');
 
-  const toggleCmdK = () => modal.classList.toggle('hidden');
-
-  triggerBtn.addEventListener('click', toggleCmdK);
-
-  document.addEventListener('keydown', (e) => {
+  window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
-      toggleCmdK();
+      palette.classList.toggle('hidden');
+      if (!palette.classList.contains('hidden')) input.focus();
     }
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      modal.classList.add('hidden');
+    if (e.key === 'Escape' && !palette.classList.contains('hidden')) {
+      palette.classList.add('hidden');
     }
   });
 
-  document.querySelectorAll('.cmd-k-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const action = item.getAttribute('data-action');
-      modal.classList.add('hidden');
+  input?.addEventListener('input', () => {
+    const val = input.value.toLowerCase().trim();
+    if (!val) {
+      list.innerHTML = `<li class="cmd-item text-muted">Type a tech keyword (e.g. FastAPI, Python, React, Remote)...</li>`;
+      return;
+    }
 
-      if (action === 'search-sde') {
-        document.getElementById('job-search-input').value = 'Software Engineer';
-        loadJobsFeed();
-      } else if (action === 'search-ai') {
-        document.getElementById('job-search-input').value = 'AI OR ML';
-        loadJobsFeed();
-      } else if (action === 'search-remote') {
-        document.getElementById('filter-remote').value = 'Remote';
-        loadJobsFeed();
-      } else if (action === 'open-searches') {
-        document.querySelector('[data-tab="searches"]').click();
-      } else if (action === 'sync-now') {
-        triggerManualSync();
-      }
-    });
+    const matched = currentJobs.filter(j => 
+      j.title.toLowerCase().includes(val) || 
+      j.company.toLowerCase().includes(val) || 
+      (j.raw_tags || '').toLowerCase().includes(val)
+    );
+
+    if (matched.length === 0) {
+      list.innerHTML = `<li class="cmd-item text-muted">No quick matches for "${escapeHtml(val)}"</li>`;
+    } else {
+      list.innerHTML = matched.slice(0, 5).map(j => `
+        <li class="cmd-item" onclick="selectCmdJob(${j.id})">
+          <strong>${escapeHtml(j.title)}</strong> at ${escapeHtml(j.company)}
+        </li>
+      `).join('');
+    }
   });
 }
 
-/* UTILS */
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+function selectCmdJob(jobId) {
+  document.getElementById('command-palette').classList.add('hidden');
+  const targetJob = currentJobs.find(j => j.id === jobId);
+  if (targetJob) {
+    const applyTarget = targetJob.external_apply_url || targetJob.job_url;
+    if (applyTarget && applyTarget !== '#') window.open(applyTarget, '_blank');
+  }
 }

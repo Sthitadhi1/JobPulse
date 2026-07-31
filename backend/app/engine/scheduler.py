@@ -11,6 +11,25 @@ from backend.app.models.job import Job, SavedSearch, NotificationLog
 
 class SchedulerEngine:
     @classmethod
+    def validate_job_data(cls, job: Dict[str, Any]) -> bool:
+        """
+        PART 13 — Input Validation:
+        Title exists, Company exists, Job URL valid, Source valid, Location exists.
+        """
+        if not job.get("title") or not str(job.get("title")).strip():
+            return False
+        if not job.get("company") or not str(job.get("company")).strip():
+            return False
+        job_url = job.get("job_url") or job.get("apply_url")
+        if not job_url or job_url == "#":
+            return False
+        if not job.get("source") or not str(job.get("source")).strip():
+            return False
+        if not job.get("location") or not str(job.get("location")).strip():
+            return False
+        return True
+
+    @classmethod
     async def run_discovery_cycle(cls, db: AsyncSession) -> Dict[str, Any]:
         """
         Executes complete ingestion pipeline:
@@ -22,10 +41,19 @@ class SchedulerEngine:
         # Step 2: Normalize fields
         normalized_jobs = [NormalizerEngine.normalize_job_data(j) for j in raw_jobs]
 
-        # Step 3: Deduplicate via SHA-256 fingerprinting
-        unique_jobs = await DeduplicatorEngine.filter_duplicates(db, normalized_jobs)
+        # Step 3: Validate required fields (PART 13)
+        valid_jobs = []
+        skipped_jobs = 0
+        for j in normalized_jobs:
+            if cls.validate_job_data(j):
+                valid_jobs.append(j)
+            else:
+                skipped_jobs += 1
 
-        # Step 4: Persist clean non-duplicate jobs
+        # Step 4: Deduplicate via priority fingerprinting
+        unique_jobs = await DeduplicatorEngine.filter_duplicates(db, valid_jobs)
+
+        # Step 5: Persist clean non-duplicate jobs
         new_job_entities = []
         for j_data in unique_jobs:
             job_obj = Job(**j_data)
@@ -34,11 +62,11 @@ class SchedulerEngine:
 
         await db.commit()
 
-        # Step 5: Refresh entities to get assigned IDs
+        # Step 6: Refresh entities to get assigned IDs
         for job_obj in new_job_entities:
             await db.refresh(job_obj)
 
-        # Step 6: Load active saved searches and match new jobs
+        # Step 7: Load active saved searches and match new jobs
         res = await db.execute(select(SavedSearch).where(SavedSearch.is_active == True))
         active_searches = res.scalars().all()
 
@@ -68,6 +96,8 @@ class SchedulerEngine:
         return {
             "status": "SUCCESS",
             "raw_jobs_found": len(raw_jobs),
+            "valid_jobs": len(valid_jobs),
+            "skipped_invalid_jobs": skipped_jobs,
             "new_unique_jobs_added": len(unique_jobs),
             "notifications_dispatched": notifications_queued,
             "timestamp": datetime.datetime.utcnow().isoformat()
