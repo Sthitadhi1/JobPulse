@@ -27,4 +27,6 @@ Thumbs.db
 
 # Markdown documentation and registry files
 *.md
+!README.md
+
 
