@@ -24,3 +24,7 @@ venv/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Markdown documentation and registry files
+*.md
+
