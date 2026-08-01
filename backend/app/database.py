@@ -31,32 +31,75 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-        # Automatic SQLite column migrations for backward compatibility
-        try:
-            await conn.execute(text("ALTER TABLE jobs ADD COLUMN job_url TEXT DEFAULT '#'"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE jobs ADD COLUMN source_url TEXT DEFAULT '#'"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE jobs ADD COLUMN external_apply_url TEXT NULL"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE jobs ADD COLUMN discovered_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN telegram_connected BOOLEAN DEFAULT 0"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN telegram_token VARCHAR(100) NULL"))
-        except Exception:
-            pass
-        try:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN last_notification_sent DATETIME NULL"))
-        except Exception:
-            pass
+        # Safely query existing columns per table to avoid SQLite transaction aborts
+        async def get_existing_columns(table_name: str) -> set:
+            try:
+                res = await conn.execute(text(f"PRAGMA table_info({table_name})"))
+                return {row[1] for row in res.fetchall()}
+            except Exception:
+                return set()
+
+        job_cols = await get_existing_columns("jobs")
+        job_migrations = [
+            ("job_url", "ALTER TABLE jobs ADD COLUMN job_url TEXT DEFAULT '#'"),
+            ("source_url", "ALTER TABLE jobs ADD COLUMN source_url TEXT DEFAULT '#'"),
+            ("external_apply_url", "ALTER TABLE jobs ADD COLUMN external_apply_url TEXT NULL"),
+            ("discovered_at", "ALTER TABLE jobs ADD COLUMN discovered_at DATETIME NULL"),
+            ("department", "ALTER TABLE jobs ADD COLUMN department VARCHAR(150) NULL"),
+            ("country", "ALTER TABLE jobs ADD COLUMN country VARCHAR(100) DEFAULT 'India'"),
+            ("skills", "ALTER TABLE jobs ADD COLUMN skills TEXT NULL"),
+            ("benefits", "ALTER TABLE jobs ADD COLUMN benefits TEXT NULL"),
+            ("status", "ALTER TABLE jobs ADD COLUMN status VARCHAR(50) DEFAULT 'ACTIVE'"),
+            ("verification_status", "ALTER TABLE jobs ADD COLUMN verification_status VARCHAR(50) DEFAULT 'VERIFIED'"),
+            ("first_seen", "ALTER TABLE jobs ADD COLUMN first_seen DATETIME NULL"),
+            ("last_seen", "ALTER TABLE jobs ADD COLUMN last_seen DATETIME NULL"),
+            ("last_verified", "ALTER TABLE jobs ADD COLUMN last_verified DATETIME NULL"),
+            ("verification_count", "ALTER TABLE jobs ADD COLUMN verification_count INTEGER DEFAULT 1"),
+            ("consecutive_missing_count", "ALTER TABLE jobs ADD COLUMN consecutive_missing_count INTEGER DEFAULT 0")
+        ]
+
+        for col_name, stmt in job_migrations:
+            if col_name not in job_cols:
+                try:
+                    await conn.execute(text(stmt))
+                except Exception:
+                    pass
+
+        user_cols = await get_existing_columns("users")
+        user_migrations = [
+            ("telegram_connected", "ALTER TABLE users ADD COLUMN telegram_connected BOOLEAN DEFAULT 0"),
+            ("telegram_token", "ALTER TABLE users ADD COLUMN telegram_token VARCHAR(100) NULL"),
+            ("last_notification_sent", "ALTER TABLE users ADD COLUMN last_notification_sent DATETIME NULL")
+        ]
+        for col_name, stmt in user_migrations:
+            if col_name not in user_cols:
+                try:
+                    await conn.execute(text(stmt))
+                except Exception:
+                    pass
+
+        health_cols = await get_existing_columns("connector_health")
+        health_migrations = [
+            ("jobs_verified", "ALTER TABLE connector_health ADD COLUMN jobs_verified INTEGER DEFAULT 0"),
+            ("jobs_removed", "ALTER TABLE connector_health ADD COLUMN jobs_removed INTEGER DEFAULT 0")
+        ]
+        for col_name, stmt in health_migrations:
+            if col_name not in health_cols:
+                try:
+                    await conn.execute(text(stmt))
+                except Exception:
+                    pass
+
+        exec_cols = await get_existing_columns("connector_executions")
+        exec_migrations = [
+            ("jobs_verified", "ALTER TABLE connector_executions ADD COLUMN jobs_verified INTEGER DEFAULT 0"),
+            ("jobs_removed", "ALTER TABLE connector_executions ADD COLUMN jobs_removed INTEGER DEFAULT 0")
+        ]
+        for col_name, stmt in exec_migrations:
+            if col_name not in exec_cols:
+                try:
+                    await conn.execute(text(stmt))
+                except Exception:
+                    pass
+
+

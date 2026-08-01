@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from backend.app.database import get_db
-from backend.app.models.job import ConnectorHealth, ConnectorExecution, Job
+from backend.app.models.job import ConnectorHealth, ConnectorExecution, Job, CompanyRegistry
 from backend.app.engine.scheduler import scheduler_engine
 
 router = APIRouter(prefix="/admin/connectors", tags=["Admin Connectors"])
@@ -76,6 +76,43 @@ async def get_connector_history(
         ]
     }
 
+@router.get("/companies")
+async def list_registered_companies(db: AsyncSession = Depends(get_db)):
+    """
+    PART 1 — Company Registry API Endpoint
+    Returns registered companies with search metadata.
+    """
+    res = await db.execute(select(CompanyRegistry).order_by(CompanyRegistry.priority.desc(), CompanyRegistry.name.asc()))
+    companies = res.scalars().all()
+    
+    # If DB registry is empty, load from companies.json
+    if not companies:
+        from backend.app.connectors.config_company import load_configurable_company_connectors, CONFIG_FILE_PATH
+        import json, os
+        if os.path.exists(CONFIG_FILE_PATH):
+            with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return {"success": True, "count": len(data), "data": data}
+
+    return {
+        "success": True,
+        "count": len(companies),
+        "data": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "category": c.category,
+                "careers_url": c.careers_url,
+                "ats_provider": c.ats_provider,
+                "country": c.country,
+                "priority": c.priority,
+                "enabled": c.enabled,
+                "notes": c.notes
+            }
+            for c in companies
+        ]
+    }
+
 @router.get("/")
 @router.get("")
 async def get_connector_health(db: AsyncSession = Depends(get_db)):
@@ -99,6 +136,7 @@ async def get_connector_health(db: AsyncSession = Depends(get_db)):
         success_rate = round((success_execs / total_execs) * 100.0, 1)
 
         health_score = "HEALTHY" if success_rate >= 90 else ("DEGRADED" if success_rate >= 50 else "FAILING")
+        verification_rate = round(((r.jobs_verified or r.total_jobs_indexed) / max(1, r.total_jobs_indexed)) * 100.0, 1)
 
         formatted.append({
             "id": r.id,
@@ -107,9 +145,12 @@ async def get_connector_health(db: AsyncSession = Depends(get_db)):
             "status": r.status,
             "health_score": health_score,
             "success_rate": success_rate,
+            "verification_rate": verification_rate,
             "last_run": r.last_run.isoformat() if r.last_run else None,
             "jobs_found_last_run": r.jobs_found_last_run,
             "total_jobs_indexed": r.total_jobs_indexed,
+            "jobs_verified": r.jobs_verified or r.total_jobs_indexed,
+            "jobs_removed": r.jobs_removed or 0,
             "average_runtime_ms": r.average_runtime_ms or 150.0,
             "error_message": r.error_message
         })
@@ -128,3 +169,4 @@ async def trigger_manual_sync(db: AsyncSession = Depends(get_db)):
         "message": "Manual connector discovery cycle completed.",
         "data": result
     }
+

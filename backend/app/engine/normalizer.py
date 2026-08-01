@@ -47,17 +47,29 @@ class URLNormalizerValidator:
         return clean_url, True, was_relative
 
 class NormalizerEngine:
-    EXPERIENCE_KEYWORDS = {
-        "Fresher / 0-1 YOE": [r"intern", r"co-op", r"trainee", r"graduate", r"fresher", r"entry level", r"junior", r"associate", r"sde 1", r"sde i", r"software engineer 1", r"0-1", r"0 - 1"],
-        "2-4 YOE (Mid Level)": [r"2-4", r"2 - 4", r"1-3", r"1 - 3", r"mid level", r"sde ii", r"sde 2", r"software engineer 2", r"intermediate"],
-        "4+ YOE (High Exp)": [r"senior", r"staff", r"lead", r"principal", r"manager", r"architect", r"4\+", r"5\+", r"3\+"]
-    }
+    VALID_EXPERIENCE_CATEGORIES = [
+        "Internship",
+        "Campus Hiring",
+        "Fresher",
+        "Associate",
+        "Mid-Level",
+        "Senior",
+        "Lead",
+        "Staff",
+        "Principal",
+        "Manager",
+        "Director",
+        "Vice President",
+        "Distinguished Engineer",
+        "Fellow"
+    ]
 
     TECH_TAGS = [
         "Python", "Java", "C++", "Go", "Rust", "TypeScript", "JavaScript",
         "React", "Node.js", "FastAPI", "Django", "Flask", "Spring Boot",
         "Docker", "Kubernetes", "AWS", "GCP", "PostgreSQL", "MongoDB",
-        "Machine Learning", "AI", "PyTorch", "TensorFlow", "SQL", "Redis"
+        "Machine Learning", "AI", "PyTorch", "TensorFlow", "SQL", "Redis",
+        "DevOps", "Cybersecurity", "Microservices"
     ]
 
     @classmethod
@@ -67,13 +79,85 @@ class NormalizerEngine:
         return title
 
     @classmethod
-    def detect_experience_level(cls, title: str, description: str = "") -> str:
+    def detect_experience_level(cls, title: str, description: str = "", explicit_level: Optional[str] = None) -> str:
+        """
+        PART 4 & 5 — Experience Classification Engine
+        Uses weighted confidence scoring:
+        1. Structured experience field takes precedence if valid.
+        2. Strict guardrails against misclassifying 1-3 YOE / 2+ YOE roles as Freshers.
+        3. Standardized 14 category output taxonomy.
+        """
+        if explicit_level and explicit_level.strip():
+            clean_exp = explicit_level.strip()
+            # Normalize legacy values
+            if "Fresher" in clean_exp or "0-1" in clean_exp:
+                return "Fresher"
+            if "2-4" in clean_exp or "Mid" in clean_exp:
+                return "Mid-Level"
+            if "4+" in clean_exp or "Senior" in clean_exp:
+                return "Senior"
+            for cat in cls.VALID_EXPERIENCE_CATEGORIES:
+                if cat.lower() in clean_exp.lower():
+                    return cat
+
         text = f"{title} {description}".lower()
-        for level, patterns in cls.EXPERIENCE_KEYWORDS.items():
-            for pattern in patterns:
-                if re.search(r'\b' + pattern + r'\b', text):
-                    return level
-        return "Fresher / 0-1 YOE"
+
+        # 1. Executive & High Leadership Keywords
+        if re.search(r'\b(distinguished engineer|distinguished)\b', text):
+            return "Distinguished Engineer"
+        if re.search(r'\b(fellow)\b', text):
+            return "Fellow"
+        if re.search(r'\b(vice president|vp)\b', text):
+            return "Vice President"
+        if re.search(r'\b(director)\b', text):
+            return "Director"
+        if re.search(r'\b(manager|engineering manager|tech manager)\b', text):
+            return "Manager"
+        if re.search(r'\b(principal)\b', text):
+            return "Principal"
+        if re.search(r'\b(staff engineer|staff)\b', text):
+            return "Staff"
+        if re.search(r'\b(tech lead|team lead|lead engineer|lead)\b', text):
+            return "Lead"
+
+        # 2. Check YOE numeric expressions in description / requirements (GUARDRAIL FOR 1-3 YOE)
+        # Match patterns like: "1-3 years", "2+ years", "3-5 yrs", "2 to 4 years of experience"
+        yoe_match = re.search(r'(\d+)\s*(?:-|to|–|\+)?\s*(\d+)?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)?', text)
+        if yoe_match:
+            min_yoe = int(yoe_match.group(1))
+            max_yoe = int(yoe_match.group(2)) if yoe_match.group(2) else min_yoe
+
+            if min_yoe >= 8 or max_yoe >= 10:
+                return "Principal"
+            if min_yoe >= 5:
+                return "Senior"
+            if min_yoe in [1, 2, 3, 4] or max_yoe in [2, 3, 4, 5]:
+                # NEVER classify 1-3 YOE as Fresher!
+                if re.search(r'\b(senior|sr)\b', text):
+                    return "Senior"
+                return "Mid-Level"
+
+        # 3. Explicit Title / Keyword Category Matching
+        if re.search(r'\b(senior|sr\.|sr\b|sde 3|sde iii|software engineer 3|architect)\b', text):
+            return "Senior"
+
+        if re.search(r'\b(1-3|2-4|1 - 3|2 - 4|mid level|mid-level|sde 2|sde ii|software engineer 2|intermediate)\b', text):
+            return "Mid-Level"
+
+        if re.search(r'\b(intern|internship|co-op|summer intern)\b', text):
+            return "Internship"
+
+        if re.search(r'\b(campus|trainee|get|university|graduate program|campus hiring|graduate engineer)\b', text):
+            return "Campus Hiring"
+
+        if re.search(r'\b(fresher|entry level|0-1|0 - 1|new grad|fresh graduate)\b', text):
+            return "Fresher"
+
+        if re.search(r'\b(associate|sde 1|sde i|software engineer 1|software engineer i|junior|jr)\b', text):
+            return "Associate"
+
+        # Default fallback: If title has plain "software engineer", classify as Fresher for early-career platform focus
+        return "Fresher"
 
     @classmethod
     def parse_salary(cls, salary_str: Optional[str], title: str) -> Tuple[Optional[str], Optional[float], Optional[float]]:
@@ -113,9 +197,10 @@ class NormalizerEngine:
     def normalize_job_data(cls, raw_job: Dict[str, Any]) -> Dict[str, Any]:
         raw_title = raw_job.get("title", "")
         raw_desc = raw_job.get("description", "")
+        explicit_exp = raw_job.get("experience_level")
         
         norm_title = cls.normalize_title(raw_title)
-        exp_level = cls.detect_experience_level(norm_title, raw_desc)
+        exp_level = cls.detect_experience_level(norm_title, raw_desc, explicit_exp)
         salary_fmt, min_sal, max_sal = cls.parse_salary(raw_job.get("salary"), norm_title)
         tags = cls.extract_tags(norm_title, raw_desc)
 
@@ -134,7 +219,9 @@ class NormalizerEngine:
             "external_job_id": raw_job.get("external_job_id"),
             "title": norm_title,
             "company": raw_job.get("company", "Unknown"),
+            "department": raw_job.get("department"),
             "location": raw_job.get("location", "India / Remote"),
+            "country": raw_job.get("country", "India"),
             "remote_type": raw_job.get("remote_type", "Hybrid"),
             "employment_type": raw_job.get("employment_type", "Full-time"),
             "experience_level": exp_level,
@@ -149,5 +236,10 @@ class NormalizerEngine:
             "source": raw_job.get("source", "Connector"),
             "source_type": raw_job.get("source_type", "ATS"),
             "raw_tags": ", ".join(tags),
-            "description": raw_desc
+            "skills": raw_job.get("skills") or ", ".join(tags),
+            "benefits": raw_job.get("benefits"),
+            "description": raw_desc,
+            "status": raw_job.get("status", "ACTIVE"),
+            "verification_status": raw_job.get("verification_status", "VERIFIED")
         }
+

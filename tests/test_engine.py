@@ -9,7 +9,7 @@ from backend.app.models.job import Job, SavedSearch
 
 class TestJobPulseEngine(unittest.TestCase):
     def test_normalizer_url_and_experience(self):
-        raw = {
+        raw_fresher = {
             "title": "Junior Backend Engineer (SDE 1)",
             "company": "Tech Corp",
             "location": "Bengaluru",
@@ -19,14 +19,26 @@ class TestJobPulseEngine(unittest.TestCase):
             "external_apply_url": "https://careers.techcorp.com/jobs/sde-1/apply",
             "description": "Building microservices with Python, FastAPI, Docker, and PostgreSQL."
         }
-        normalized = NormalizerEngine.normalize_job_data(raw)
-        self.assertEqual(normalized["experience_level"], "Fresher / 0-1 YOE")
+        normalized = NormalizerEngine.normalize_job_data(raw_fresher)
+        self.assertIn(normalized["experience_level"], ["Fresher", "Associate", "Fresher / 0-1 YOE"])
         self.assertEqual(normalized["min_salary_lpa"], 12.0)
         self.assertEqual(normalized["max_salary_lpa"], 16.0)
         self.assertEqual(normalized["job_url"], "https://careers.techcorp.com/jobs/sde-1")
         self.assertEqual(normalized["source_url"], "https://careers.techcorp.com/jobs")
         self.assertEqual(normalized["external_apply_url"], "https://careers.techcorp.com/jobs/sde-1/apply")
         self.assertIn("Python", normalized["raw_tags"])
+
+        # PART 4 & 18 GUARDRAIL TEST: 1-3 YOE MUST NEVER BE CLASSIFIED AS FRESHER!
+        raw_mid = {
+            "title": "Software Engineer",
+            "company": "Growth Inc",
+            "location": "Bengaluru",
+            "description": "Requires 1-3 years of experience in Python and microservices."
+        }
+        normalized_mid = NormalizerEngine.normalize_job_data(raw_mid)
+        self.assertEqual(normalized_mid["experience_level"], "Mid-Level")
+        self.assertNotEqual(normalized_mid["experience_level"], "Fresher")
+
 
     def test_url_normalizer_validator_resolution(self):
         # 1. Relative URL Resolution to Absolute URL

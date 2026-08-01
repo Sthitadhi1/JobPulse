@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 from backend.app.connectors.registry import connector_registry
 from backend.app.engine.normalizer import NormalizerEngine
 from backend.app.engine.deduplicator import DeduplicatorEngine
+from backend.app.engine.verification import VerificationEngine
 from backend.app.engine.matching import MatchingEngine
 from backend.app.models.job import Job, SavedSearch, NotificationLog
 
@@ -32,8 +33,8 @@ class SchedulerEngine:
     @classmethod
     async def run_discovery_cycle(cls, db: AsyncSession) -> Dict[str, Any]:
         """
-        Executes complete ingestion pipeline:
-        Fetch -> Normalize -> Validate -> Deduplicate -> Store -> Match -> Notify
+        Executes complete ingestion pipeline (PART 8):
+        Discover Jobs -> Update Existing Jobs -> Insert New Jobs -> Verify Existing Jobs -> Check Missing Jobs -> Mark Removed
         """
         # Step 1: Fetch raw job postings from connectors
         raw_jobs = await connector_registry.run_all_connectors(db)
@@ -41,7 +42,7 @@ class SchedulerEngine:
         # Step 2: Normalize fields
         normalized_jobs = [NormalizerEngine.normalize_job_data(j) for j in raw_jobs]
 
-        # Step 3: Validate required fields (PART 13)
+        # Step 3: Validate required fields
         valid_jobs = []
         skipped_jobs = 0
         for j in normalized_jobs:
@@ -50,10 +51,10 @@ class SchedulerEngine:
             else:
                 skipped_jobs += 1
 
-        # Step 4: Deduplicate via priority fingerprinting
-        unique_jobs = await DeduplicatorEngine.filter_duplicates(db, valid_jobs)
+        # Step 4: Process batch: update existing jobs and filter new unique jobs
+        unique_jobs, updated_jobs_count = await DeduplicatorEngine.process_and_update_jobs(db, valid_jobs)
 
-        # Step 5: Persist clean non-duplicate jobs
+        # Step 5: Persist clean new jobs
         new_job_entities = []
         for j_data in unique_jobs:
             job_obj = Job(**j_data)
@@ -66,7 +67,12 @@ class SchedulerEngine:
         for job_obj in new_job_entities:
             await db.refresh(job_obj)
 
-        # Step 7: Load active saved searches and match new jobs
+        # Step 7: Verify active jobs in database
+        active_jobs_res = await db.execute(select(Job).where(Job.status == "ACTIVE").limit(100))
+        active_jobs = active_jobs_res.scalars().all()
+        verified_count, removed_count = await VerificationEngine.verify_jobs_batch(db, active_jobs)
+
+        # Step 8: Load active saved searches and match new jobs
         res = await db.execute(select(SavedSearch).where(SavedSearch.is_active == True))
         active_searches = res.scalars().all()
 
@@ -98,9 +104,13 @@ class SchedulerEngine:
             "raw_jobs_found": len(raw_jobs),
             "valid_jobs": len(valid_jobs),
             "skipped_invalid_jobs": skipped_jobs,
+            "jobs_updated": updated_jobs_count,
             "new_unique_jobs_added": len(unique_jobs),
+            "jobs_verified": verified_count,
+            "jobs_removed": removed_count,
             "notifications_dispatched": notifications_queued,
             "timestamp": datetime.datetime.utcnow().isoformat()
         }
 
 scheduler_engine = SchedulerEngine()
+

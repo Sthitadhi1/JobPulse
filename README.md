@@ -25,39 +25,48 @@ JobPulse automates the discovery process while respecting the user's decision to
 
 ---
 
-# Core Features
+# Core Features — JobPulse V2
 
-### 🔍 Intelligent Job Discovery
+### 🔍 Intelligent Job Discovery & 300+ Company Registry
 
-Continuously scans supported public job sources.
+Continuously scans 300+ top product companies, Indian startups/unicorns, IT services, and consulting firms indexed in `companies.json`.
 
 Supports:
-
-* Software Engineer
-* Backend Engineer
-* Frontend Engineer
-* Full Stack Engineer
-* AI / ML Engineer
-* Data Engineer
-* DevOps Engineer
-* Security Engineer
-* QA Engineer
-* Product Roles
-* Custom keywords
+* Software Engineers, AI/ML Engineers, Data Engineers, DevOps Engineers, Security Engineers, SREs, Product Engineers, and Interns.
+* Configuration-driven Company Registry scalable to 1000+ companies without code changes.
 
 ---
 
-### 🎯 Smart Search
+### 🧠 Weighted Experience Classification Engine
+
+Normalizes all postings into 14 standardized experience categories:
+`Internship` | `Campus Hiring` | `Fresher` | `Associate` | `Mid-Level` | `Senior` | `Lead` | `Staff` | `Principal` | `Manager` | `Director` | `Vice President` | `Distinguished Engineer` | `Fellow`
+
+* **Strict Experience Guardrail**: Roles requiring 1–3 YOE or 2+ YOE are classified as Mid-Level / Associate and **never misclassified as Freshers**.
+
+---
+
+### 🛡️ Persistent Job Tracking & Verification Engine
+
+* **Persistent State Machine**: Tracks job status (`ACTIVE`, `EXPIRED`, `FILLED`, `REMOVED`, `UNKNOWN`) and verification indicators.
+* **Multi-Cycle Verification**: Requires 3 consecutive missing cycles before marking a job as `REMOVED`. Network drops never delete active listings.
+* **Real-Time Verification Badges**: Displays 🟢 **Verified Today**, 🟡 **Verification Pending**, 🔴 **Removed from Source** badges along with `First Seen` and `Last Verified` timestamps.
+
+---
+
+### 🔗 Smart Apply Links
+
+* Priority resolution target: `external_apply_url` ➔ `job_url`.
+* Strictly prevents redirecting users to generic company homepages or career search pages.
+
+---
+
+### 🎯 Smart Multi-Criteria Search & Analytics Dashboard
 
 Filter jobs by:
+* Role, Company, Location, Country, Remote Mode (`Remote`, `Hybrid`, `On-site`), Min Salary, ATS Provider, Verification Status, and Posting Date.
+* Live Telemetry Dashboard tracking daily fresher postings, internships, verification rates, and top hiring companies.
 
-* Role
-* Company
-* Location
-* Remote
-* Experience
-* Employment Type
-* Posted Date
 * Salary (when available)
 
 ---

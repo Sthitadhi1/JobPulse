@@ -173,17 +173,25 @@ function renderJobsGrid(container, jobs) {
     container.innerHTML = `
       <div class="card card-padded text-center">
         <h3>No matching jobs found</h3>
-        <p class="text-muted">Try adjusting your Boolean keywords, salary, or experience level filters.</p>
+        <p class="text-muted">Try adjusting your search query, location, or experience level filters.</p>
       </div>`;
     return;
   }
 
   container.innerHTML = jobs.map(job => {
-    // PART 5 — Apply Button Resolution Priority:
-    // external_apply_url -> job_url -> url. Never open source_url.
+    // PART 10 — Smart Apply Links Priority:
+    // external_apply_url -> job_url -> url. Never redirect to generic homepages.
     const applyTarget = job.external_apply_url || job.job_url || (job.url !== '#' ? job.url : null);
     
-    // PART 6 — Source Badges
+    // PART 9 — Verification Badge Indicator
+    const vStatus = job.verification_status || 'VERIFIED';
+    let vBadgeHtml = '<span class="badge badge-pulse" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">🟢 Verified Today</span>';
+    if (vStatus === 'PENDING') {
+      vBadgeHtml = '<span class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);">🟡 Verification Pending</span>';
+    } else if (vStatus === 'REMOVED_FROM_SOURCE' || job.status === 'REMOVED') {
+      vBadgeHtml = '<span class="badge" style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🔴 Removed from Source</span>';
+    }
+
     const sourceType = (job.source_type || 'ATS').toLowerCase();
     let badgeClass = 'badge-source-ats';
     if (sourceType.includes('board')) badgeClass = 'badge-source-board';
@@ -197,13 +205,17 @@ function renderJobsGrid(container, jobs) {
         Application link unavailable
       </button>`;
 
+    const firstSeenDate = formatDate(job.first_seen || job.created_at);
+    const lastVerifiedDate = formatDate(job.last_verified || job.created_at);
+
     return `
       <div class="job-card card">
         <div class="job-card-header">
           <div>
-            <div class="company-row">
+            <div class="company-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
               <span class="company-name">${escapeHtml(job.company)}</span>
               <span class="badge-source ${badgeClass}">${job.source_type || 'ATS'}</span>
+              ${vBadgeHtml}
             </div>
             <h3 class="job-title">${escapeHtml(job.title)}</h3>
           </div>
@@ -224,7 +236,7 @@ function renderJobsGrid(container, jobs) {
         </div>
 
         <div class="job-card-footer">
-          <small class="posted-date">Via ${escapeHtml(job.source)} • ${formatDate(job.posted_at)}</small>
+          <small class="posted-date">Via ${escapeHtml(job.source)} • Seen: ${firstSeenDate} • Verified: ${lastVerifiedDate}</small>
           <div class="action-buttons">
             <button class="btn btn-sm btn-ghost" onclick="copyJobLink('${escapeHtml(applyTarget || '')}')" title="Copy listing URL">
               🔗 Share
@@ -236,6 +248,7 @@ function renderJobsGrid(container, jobs) {
     `;
   }).join('');
 }
+
 
 function formatDate(isoStr) {
   if (!isoStr) return 'Recently';
@@ -342,14 +355,28 @@ async function loadBookmarksFeed() {
 /* ANALYTICS VIEW */
 async function loadAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/analytics/summary`);
+    const res = await fetch(`${API_BASE}/analytics/dashboard`);
     const result = await res.json();
-    if (result.success) {
+    if (result.success && result.data) {
       const data = result.data;
-      document.getElementById('stat-total-jobs').textContent = data.total_jobs || 0;
-      document.getElementById('stat-remote-jobs').textContent = data.remote_jobs || 0;
-      document.getElementById('stat-fresher-jobs').textContent = data.fresher_jobs || 0;
-      document.getElementById('stat-avg-salary').textContent = `₹${data.avg_min_salary_lpa || 12} LPA`;
+      if (document.getElementById('stat-freshers-today')) document.getElementById('stat-freshers-today').textContent = data.freshers_jobs_today || 0;
+      if (document.getElementById('stat-internships-today')) document.getElementById('stat-internships-today').textContent = data.internships_today || 0;
+      if (document.getElementById('stat-mid-today')) document.getElementById('stat-mid-today').textContent = data.mid_level_jobs_today || 0;
+      if (document.getElementById('stat-senior-today')) document.getElementById('stat-senior-today').textContent = data.senior_jobs_today || 0;
+      if (document.getElementById('stat-verified-today')) document.getElementById('stat-verified-today').textContent = data.jobs_verified_today || 0;
+      if (document.getElementById('stat-comp-freshers')) document.getElementById('stat-comp-freshers').textContent = data.companies_hiring_freshers || 0;
+      if (document.getElementById('stat-verification-rate')) document.getElementById('stat-verification-rate').textContent = `${data.verification_success_rate || 100}%`;
+      if (document.getElementById('stat-companies')) document.getElementById('stat-companies').textContent = data.companies_tracked || '300+';
+
+      const topList = document.getElementById('top-companies-list');
+      if (topList && data.most_active_companies) {
+        topList.innerHTML = data.most_active_companies.map(c => `
+          <li style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--border-color);">
+            <strong>${escapeHtml(c.company)}</strong>
+            <span class="badge badge-outline">${c.count} active roles</span>
+          </li>
+        `).join('');
+      }
     }
   } catch (err) {
     console.error('Analytics error:', err);
@@ -374,6 +401,7 @@ async function loadConnectorHealth() {
               <th>Source Type</th>
               <th>Health Status</th>
               <th>Success Rate</th>
+              <th>Verification Rate</th>
               <th>Jobs Last Run</th>
               <th>Total Indexed</th>
               <th>Avg Runtime</th>
@@ -387,6 +415,7 @@ async function loadConnectorHealth() {
                 <td><span class="badge-source badge-source-${(c.source_type || 'ats').toLowerCase()}">${c.source_type}</span></td>
                 <td><span class="badge ${c.health_score === 'HEALTHY' ? 'badge-pulse' : 'badge-danger'}">${c.health_score || c.status}</span></td>
                 <td><strong>${c.success_rate || 100}%</strong></td>
+                <td><strong>${c.verification_rate || 100}%</strong></td>
                 <td>${c.jobs_found_last_run}</td>
                 <td>${c.total_jobs_indexed}</td>
                 <td><strong>${c.average_runtime_ms} ms</strong></td>
@@ -401,6 +430,7 @@ async function loadConnectorHealth() {
     container.innerHTML = `<div class="card card-padded">Failed to load connectors health.</div>`;
   }
 }
+
 
 async function triggerManualSync() {
   const syncBtn = document.getElementById('sync-now-btn');

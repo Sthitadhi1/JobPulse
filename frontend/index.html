@@ -89,9 +89,20 @@
                 <label>Experience:</label>
                 <select id="filter-exp">
                   <option value="" selected>All Experience Levels</option>
-                  <option value="Fresher">Fresher / 0-1 YOE</option>
-                  <option value="2-4">2-4 YOE (Mid Level)</option>
-                  <option value="4+">4+ YOE (High Exp / Senior)</option>
+                  <option value="Fresher">⭐ Freshers / Entry Level</option>
+                  <option value="Campus Hiring">🎓 Campus Hiring / Trainee</option>
+                  <option value="Internship">🚀 Internship / Co-op</option>
+                  <option value="Associate">💼 Associate (SDE 1)</option>
+                  <option value="Mid-Level">⚙️ Mid-Level (1-4 YOE / SDE 2)</option>
+                  <option value="Senior">🔥 Senior (4+ YOE / SDE 3)</option>
+                  <option value="Lead">👑 Lead / Tech Lead</option>
+                  <option value="Staff">⚡ Staff Engineer</option>
+                  <option value="Principal">🏛️ Principal Engineer</option>
+                  <option value="Manager">📊 Engineering Manager</option>
+                  <option value="Director">🎯 Director</option>
+                  <option value="Vice President">🌐 Vice President</option>
+                  <option value="Distinguished Engineer">🌟 Distinguished Engineer</option>
+                  <option value="Fellow">🎖️ Fellow</option>
                 </select>
               </div>
 
@@ -112,6 +123,7 @@
                   <option value="8">₹8 LPA+</option>
                   <option value="12">₹12 LPA+</option>
                   <option value="15">₹15 LPA+</option>
+                  <option value="20">₹20 LPA+</option>
                 </select>
               </div>
 
@@ -149,8 +161,8 @@
         <section id="tab-searches" class="tab-pane">
           <div class="section-header">
             <div>
-              <h2>Continuous Saved Searches</h2>
-              <p class="text-muted">JobPulse continuously monitors career pages for these alerts and triggers instant notifications.</p>
+              <h2>Saved Search Rules & Automated Alerts</h2>
+              <p class="text-muted">JobPulse continuously monitors matching roles and alerts via Telegram.</p>
             </div>
             <button id="create-search-modal-btn" class="btn btn-primary">➕ New Saved Search</button>
           </div>
@@ -163,8 +175,8 @@
         <!-- TAB 3: BOOKMARKS & APPLICATIONS -->
         <section id="tab-bookmarks" class="tab-pane">
           <div class="section-header">
-            <h2>Bookmarked Jobs & Application Tracker</h2>
-            <p class="text-muted">Human-in-the-loop tracker to organize your application journey.</p>
+            <h2>Bookmarked Opportunities & Application Tracker</h2>
+            <p class="text-muted">Manage interest folders and active employer applications.</p>
           </div>
 
           <div id="bookmarks-container" class="jobs-grid">
@@ -175,26 +187,42 @@
         <!-- TAB 4: ANALYTICS -->
         <section id="tab-analytics" class="tab-pane">
           <div class="section-header">
-            <h2>Discovery Engine Analytics</h2>
-            <p class="text-muted">Real-time metrics on job indexing and notification success.</p>
+            <h2>Live Hiring Trends & Platform Analytics</h2>
+            <p class="text-muted">Real-time telemetry across 300+ tracked companies, ATS boards, and experience breakdown.</p>
           </div>
 
           <div class="stats-grid" id="analytics-stats">
             <div class="stat-card">
-              <span class="stat-label">Jobs Indexed Today</span>
-              <span class="stat-value" id="stat-jobs-today">0</span>
+              <span class="stat-label">Freshers Jobs Today</span>
+              <span class="stat-value" id="stat-freshers-today">0</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Active Saved Searches</span>
-              <span class="stat-value" id="stat-searches">0</span>
+              <span class="stat-label">Internships Today</span>
+              <span class="stat-value" id="stat-internships-today">0</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Telegram Notifications Sent</span>
-              <span class="stat-value" id="stat-notifs">0</span>
+              <span class="stat-label">Mid-Level Jobs Today</span>
+              <span class="stat-value" id="stat-mid-today">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Senior Jobs Today</span>
+              <span class="stat-value" id="stat-senior-today">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Jobs Verified Today</span>
+              <span class="stat-value" id="stat-verified-today">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Companies Hiring Freshers</span>
+              <span class="stat-value" id="stat-comp-freshers">0</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Verification Rate</span>
+              <span class="stat-value" id="stat-verification-rate">100%</span>
             </div>
             <div class="stat-card">
               <span class="stat-label">Companies Tracked</span>
-              <span class="stat-value" id="stat-companies">0</span>
+              <span class="stat-value" id="stat-companies">300+</span>
             </div>
           </div>
 
@@ -211,7 +239,7 @@
           <div class="section-header">
             <div>
               <h2>Source Connectors & Health Diagnostics</h2>
-              <p class="text-muted">Plugin-based connector framework indexing ATS boards and company pages.</p>
+              <p class="text-muted">300+ company registry and plugin connectors indexing public job pages and ATS platforms.</p>
             </div>
             <button id="trigger-sync-panel-btn" class="btn btn-primary">🔄 Run All Connectors Now</button>
           </div>

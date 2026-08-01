@@ -17,6 +17,25 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class CompanyRegistry(Base):
+    __tablename__ = "company_registry"
+
+    id = Column(String(100), primary_key=True, index=True) # e.g. "google", "flipkart"
+    name = Column(String(255), nullable=False, index=True)
+    category = Column(String(100), default="Product Company", index=True)
+    careers_url = Column(Text, nullable=False)
+    ats_provider = Column(String(100), default="Custom", index=True)
+    country = Column(String(100), default="India", index=True)
+    priority = Column(Integer, default=5, index=True) # 1-5
+    crawl_interval = Column(Integer, default=60) # minutes
+    enabled = Column(Boolean, default=True, index=True)
+    supported_locations = Column(Text, nullable=True) # JSON or comma-separated
+    supported_roles = Column(Text, nullable=True)
+    tags = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
 class Job(Base):
     __tablename__ = "jobs"
 
@@ -24,10 +43,12 @@ class Job(Base):
     external_job_id = Column(String(100), nullable=True)
     title = Column(String(255), nullable=False, index=True)
     company = Column(String(255), nullable=False, index=True)
+    department = Column(String(150), nullable=True)
     location = Column(String(255), nullable=False, index=True)
+    country = Column(String(100), default="India", index=True)
     remote_type = Column(String(50), default="Hybrid", index=True) # Remote, Hybrid, On-site
     employment_type = Column(String(50), default="Full-time") # Full-time, Internship, Contract
-    experience_level = Column(String(50), nullable=False, default="Fresher / 0-1 YOE", index=True)
+    experience_level = Column(String(50), nullable=False, default="Fresher", index=True)
     salary_range = Column(String(100), nullable=True) # e.g. "₹10 - ₹14 LPA"
     min_salary_lpa = Column(Float, nullable=True, index=True)
     max_salary_lpa = Column(Float, nullable=True, index=True)
@@ -36,16 +57,28 @@ class Job(Base):
     # URL Normalization
     job_url = Column(Text, nullable=False) # URL of individual job listing
     source_url = Column(Text, nullable=False) # URL of career page / board listing
-    external_apply_url = Column(Text, nullable=True) # Optional direct employer apply URL
+    external_apply_url = Column(Text, nullable=True) # Direct employer apply URL
     apply_url = Column(Text, nullable=True) # Backward compatibility
     canonical_url = Column(Text, nullable=True)
 
     source = Column(String(100), nullable=False, index=True) # e.g. "Greenhouse", "Lever", "LinkedIn Jobs", "Naukri India"
     source_type = Column(String(50), default="ATS") # ATS, Job Board, Company
     raw_tags = Column(String(255), nullable=True) # Tech keywords e.g. "Python, React, FastAPI"
+    skills = Column(Text, nullable=True)
+    benefits = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     hash_signature = Column(String(64), unique=True, index=True, nullable=False)
     is_bookmarked = Column(Boolean, default=False, index=True)
+
+    # Persistent Job Tracking & Verification (PART 7, 8, 9)
+    status = Column(String(50), default="ACTIVE", index=True) # ACTIVE, EXPIRED, FILLED, REMOVED, UNKNOWN
+    verification_status = Column(String(50), default="VERIFIED", index=True) # VERIFIED, PENDING, REMOVED_FROM_SOURCE, FAILED
+    first_seen = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    last_seen = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    last_verified = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    verification_count = Column(Integer, default=1)
+    consecutive_missing_count = Column(Integer, default=0)
+
     posted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     discovered_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
@@ -113,6 +146,8 @@ class ConnectorHealth(Base):
     last_run = Column(DateTime, nullable=True)
     jobs_found_last_run = Column(Integer, default=0)
     total_jobs_indexed = Column(Integer, default=0)
+    jobs_verified = Column(Integer, default=0)
+    jobs_removed = Column(Integer, default=0)
     average_runtime_ms = Column(Float, default=0.0)
     error_message = Column(Text, nullable=True)
 
@@ -128,7 +163,10 @@ class ConnectorExecution(Base):
     jobs_discovered = Column(Integer, default=0)
     jobs_inserted = Column(Integer, default=0)
     jobs_updated = Column(Integer, default=0)
+    jobs_verified = Column(Integer, default=0)
+    jobs_removed = Column(Integer, default=0)
     jobs_skipped = Column(Integer, default=0)
     errors_count = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
     status = Column(String(50), default="SUCCESS", index=True)
+
