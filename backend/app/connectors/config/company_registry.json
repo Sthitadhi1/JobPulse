@@ -1,0 +1,152 @@
+[
+  {
+    "id": "vercel",
+    "name": "Vercel",
+    "category": "Developer Tools",
+    "careers_url": "https://vercel.com/careers",
+    "ats_provider": "greenhouse",
+    "board_token": "vercel",
+    "enabled": true,
+    "country": "Worldwide / Remote"
+  },
+  {
+    "id": "stripe",
+    "name": "Stripe",
+    "category": "Fintech",
+    "careers_url": "https://stripe.com/jobs",
+    "ats_provider": "greenhouse",
+    "board_token": "stripe",
+    "enabled": true,
+    "country": "Worldwide / Remote"
+  },
+  {
+    "id": "figma",
+    "name": "Figma",
+    "category": "Design & Tech",
+    "careers_url": "https://www.figma.com/careers/",
+    "ats_provider": "greenhouse",
+    "board_token": "figma",
+    "enabled": true,
+    "country": "Worldwide / Remote"
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "category": "Cloud & Security",
+    "careers_url": "https://www.cloudflare.com/careers/",
+    "ats_provider": "greenhouse",
+    "board_token": "cloudflare",
+    "enabled": true,
+    "country": "India / Remote"
+  },
+  {
+    "id": "datadog",
+    "name": "Datadog",
+    "category": "Monitoring & Cloud",
+    "careers_url": "https://www.datadoghq.com/careers/",
+    "ats_provider": "greenhouse",
+    "board_token": "datadog",
+    "enabled": true,
+    "country": "Worldwide / Remote"
+  },
+  {
+    "id": "supabase",
+    "name": "Supabase",
+    "category": "Developer Tools",
+    "careers_url": "https://supabase.com/careers",
+    "ats_provider": "lever",
+    "board_token": "supabase",
+    "enabled": true,
+    "country": "Worldwide / Remote"
+  },
+  {
+    "id": "postman",
+    "name": "Postman",
+    "category": "Developer Tools",
+    "careers_url": "https://www.postman.com/careers/",
+    "ats_provider": "lever",
+    "board_token": "postman",
+    "enabled": true,
+    "country": "India / Remote"
+  },
+  {
+    "id": "browserstack",
+    "name": "BrowserStack",
+    "category": "Developer Tools",
+    "careers_url": "https://www.browserstack.com/careers",
+    "ats_provider": "lever",
+    "board_token": "browserstack",
+    "enabled": true,
+    "country": "India / Remote"
+  },
+  {
+    "id": "palantir",
+    "name": "Palantir",
+    "category": "Enterprise AI",
+    "careers_url": "https://www.palantir.com/careers/",
+    "ats_provider": "lever",
+    "board_token": "palantir",
+    "enabled": true,
+    "country": "Worldwide / Remote"
+  },
+  {
+    "id": "phonepe",
+    "name": "PhonePe",
+    "category": "Indian Unicorn",
+    "careers_url": "https://phonepe.com/careers/",
+    "ats_provider": "greenhouse",
+    "board_token": "phonepe",
+    "enabled": true,
+    "country": "India"
+  },
+  {
+    "id": "swiggy",
+    "name": "Swiggy",
+    "category": "Indian Unicorn",
+    "careers_url": "https://careers.swiggy.com/",
+    "ats_provider": "greenhouse",
+    "board_token": "swiggy",
+    "enabled": true,
+    "country": "India"
+  },
+  {
+    "id": "zomato",
+    "name": "Zomato",
+    "category": "Indian Unicorn",
+    "careers_url": "https://www.zomato.com/careers",
+    "ats_provider": "greenhouse",
+    "board_token": "zomato",
+    "enabled": true,
+    "country": "India"
+  },
+  {
+    "id": "razorpay",
+    "name": "Razorpay",
+    "category": "Indian Unicorn",
+    "careers_url": "https://razorpay.com/jobs/",
+    "ats_provider": "greenhouse",
+    "board_token": "razorpay",
+    "enabled": true,
+    "country": "India"
+  },
+  {
+    "id": "cred",
+    "name": "CRED",
+    "category": "Indian Unicorn",
+    "careers_url": "https://cred.club/careers",
+    "ats_provider": "greenhouse",
+    "board_token": "cred",
+    "enabled": true,
+    "country": "India"
+  },
+  {
+    "id": "meesho",
+    "name": "Meesho",
+    "category": "Indian Unicorn",
+    "careers_url": "https://meesho.io/careers",
+    "ats_provider": "lever",
+    "board_token": "meesho",
+    "enabled": true,
+    "country": "India"
+  }
+]

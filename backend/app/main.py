@@ -10,6 +10,7 @@ from backend.app.api.searches import router as searches_router
 from backend.app.api.connectors import router as connectors_router
 from backend.app.api.notifications import router as notifications_router
 from backend.app.api.analytics import router as analytics_router
+from backend.app.api.ai import router as ai_router
 from backend.app.engine.scheduler import scheduler_engine
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app.include_router(searches_router, prefix=prefix)
 app.include_router(connectors_router, prefix=prefix)
 app.include_router(notifications_router, prefix=prefix)
 app.include_router(analytics_router, prefix=prefix)
+app.include_router(ai_router, prefix=prefix)
 
 @app.get("/")
 async def root():

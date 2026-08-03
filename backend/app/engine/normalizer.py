@@ -8,16 +8,24 @@ class URLNormalizerValidator:
         r"/careers/?$",
         r"/jobs/?$",
         r"/about/careers/?$",
+        r"/job-openings/?$",
         r"/boards\.greenhouse\.io/[^/]+/?$",
         r"/jobs\.lever\.co/[^/]+/?$",
         r"/search/?$",
-        r"/results/?$"
+        r"/results/?$",
+        r"\?department=",
+        r"\?category=",
+        r"\?search=",
+        r"\?query=",
+        r"\?filter=",
+        r"/careers/job-openings"
     ]
 
     @classmethod
     def resolve_and_validate_url(cls, raw_url: Optional[str], source_url: Optional[str] = None) -> Tuple[str, bool, bool]:
         """
-        Resolves relative URLs to absolute URLs and validates individual job link.
+        Step 6 & 7: Resolves relative URLs to absolute URLs and validates individual job link.
+        Rejects homepages, career search pages, department filter pages.
         Returns (clean_url, is_valid, was_relative_corrected)
         """
         if not raw_url or raw_url == "#":
@@ -26,7 +34,6 @@ class URLNormalizerValidator:
         clean_url = raw_url.strip()
         was_relative = False
 
-        # Check if relative URL (starts with / or no scheme)
         parsed = urlparse(clean_url)
         if not parsed.scheme or not parsed.netloc:
             if source_url and source_url != "#":
@@ -47,6 +54,7 @@ class URLNormalizerValidator:
         return clean_url, True, was_relative
 
 class NormalizerEngine:
+    # Step 8: Standardized 14 Experience Categories
     VALID_EXPERIENCE_CATEGORIES = [
         "Internship",
         "Campus Hiring",
@@ -81,28 +89,25 @@ class NormalizerEngine:
     @classmethod
     def detect_experience_level(cls, title: str, description: str = "", explicit_level: Optional[str] = None) -> str:
         """
-        PART 4 & 5 — Experience Classification Engine
-        Uses weighted confidence scoring:
-        1. Structured experience field takes precedence if valid.
-        2. Strict guardrails against misclassifying 1-3 YOE / 2+ YOE roles as Freshers.
-        3. Standardized 14 category output taxonomy.
+        Step 8 — Multi-tier Experience Level Classifier:
+        1. Check structured ATS level field
+        2. Inspect requirements / YOE in text
+        3. Match explicit seniority tokens
         """
         if explicit_level and explicit_level.strip():
             clean_exp = explicit_level.strip()
-            # Normalize legacy values
-            if "Fresher" in clean_exp or "0-1" in clean_exp:
-                return "Fresher"
-            if "2-4" in clean_exp or "Mid" in clean_exp:
-                return "Mid-Level"
-            if "4+" in clean_exp or "Senior" in clean_exp:
-                return "Senior"
             for cat in cls.VALID_EXPERIENCE_CATEGORIES:
                 if cat.lower() in clean_exp.lower():
                     return cat
+            if "fresher" in clean_exp.lower() or "0-1" in clean_exp:
+                return "Fresher"
+            if "2-4" in clean_exp or "mid" in clean_exp.lower():
+                return "Mid-Level"
+            if "4+" in clean_exp or "senior" in clean_exp.lower():
+                return "Senior"
 
         text = f"{title} {description}".lower()
 
-        # 1. Executive & High Leadership Keywords
         if re.search(r'\b(distinguished engineer|distinguished)\b', text):
             return "Distinguished Engineer"
         if re.search(r'\b(fellow)\b', text):
@@ -120,8 +125,7 @@ class NormalizerEngine:
         if re.search(r'\b(tech lead|team lead|lead engineer|lead)\b', text):
             return "Lead"
 
-        # 2. Check YOE numeric expressions in description / requirements (GUARDRAIL FOR 1-3 YOE)
-        # Match patterns like: "1-3 years", "2+ years", "3-5 yrs", "2 to 4 years of experience"
+        # YOE Pattern Parsing
         yoe_match = re.search(r'(\d+)\s*(?:-|to|–|\+)?\s*(\d+)?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)?', text)
         if yoe_match:
             min_yoe = int(yoe_match.group(1))
@@ -132,12 +136,10 @@ class NormalizerEngine:
             if min_yoe >= 5:
                 return "Senior"
             if min_yoe in [1, 2, 3, 4] or max_yoe in [2, 3, 4, 5]:
-                # NEVER classify 1-3 YOE as Fresher!
                 if re.search(r'\b(senior|sr)\b', text):
                     return "Senior"
                 return "Mid-Level"
 
-        # 3. Explicit Title / Keyword Category Matching
         if re.search(r'\b(senior|sr\.|sr\b|sde 3|sde iii|software engineer 3|architect)\b', text):
             return "Senior"
 
@@ -156,17 +158,20 @@ class NormalizerEngine:
         if re.search(r'\b(associate|sde 1|sde i|software engineer 1|software engineer i|junior|jr)\b', text):
             return "Associate"
 
-        # Default fallback: If title has plain "software engineer", classify as Fresher for early-career platform focus
         return "Fresher"
 
     @classmethod
     def parse_salary(cls, salary_str: Optional[str], title: str) -> Tuple[Optional[str], Optional[float], Optional[float]]:
+        """
+        Step 9: Zero Fabrication.
+        If salary is missing or unparseable, returns (None, None, None).
+        """
         if not salary_str:
-            if any(k in title.lower() for k in ["sde", "software", "backend", "frontend", "ai", "data"]):
-                return "₹8 - ₹14 LPA (Est.)", 8.0, 14.0
-            return "Salary Disclosed on Application", None, None
+            return None, None, None
 
-        salary_clean = salary_str.strip()
+        salary_clean = str(salary_str).strip()
+        if not salary_clean or salary_clean == "#" or "not disclosed" in salary_clean.lower():
+            return None, None, None
         
         lpa_range = re.search(r'(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*(?:[₹$INR]+\s*)?(\d+(?:\.\d+)?)\s*(?:LPA|Lakh|Lakhs)', salary_clean, re.IGNORECASE)
         if lpa_range:
@@ -191,29 +196,32 @@ class NormalizerEngine:
             pattern = r'\b' + re.escape(tag) + r'\b'
             if re.search(pattern, text, re.IGNORECASE):
                 tags.append(tag)
-        return tags if tags else ["Software Engineering", "Tech"]
+        return tags
 
     @classmethod
     def normalize_job_data(cls, raw_job: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Full Normalization & Zero Fabrication Enforcement
+        """
         raw_title = raw_job.get("title", "")
-        raw_desc = raw_job.get("description", "")
+        raw_desc = raw_job.get("description")
         explicit_exp = raw_job.get("experience_level")
         
         norm_title = cls.normalize_title(raw_title)
-        exp_level = cls.detect_experience_level(norm_title, raw_desc, explicit_exp)
+        exp_level = cls.detect_experience_level(norm_title, raw_desc or "", explicit_exp)
         salary_fmt, min_sal, max_sal = cls.parse_salary(raw_job.get("salary"), norm_title)
-        tags = cls.extract_tags(norm_title, raw_desc)
+        tags = cls.extract_tags(norm_title, raw_desc or "")
 
         source_url = raw_job.get("source_url") or raw_job.get("url") or "#"
         raw_job_url = raw_job.get("job_url") or raw_job.get("url") or "#"
         raw_apply_url = raw_job.get("external_apply_url")
 
-        # Resolve & Validate job_url
+        # Resolve & Validate job_url and external_apply_url
         clean_job_url, job_url_valid, _ = URLNormalizerValidator.resolve_and_validate_url(raw_job_url, source_url)
         clean_apply_url, apply_url_valid, _ = URLNormalizerValidator.resolve_and_validate_url(raw_apply_url, source_url) if raw_apply_url else ("#", False, False)
 
         final_job_url = clean_job_url if job_url_valid else (clean_apply_url if apply_url_valid else "#")
-        final_external_apply_url = clean_apply_url if apply_url_valid else None
+        final_external_apply_url = clean_apply_url if apply_url_valid else final_job_url
 
         return {
             "external_job_id": raw_job.get("external_job_id"),
@@ -235,11 +243,10 @@ class NormalizerEngine:
             "canonical_url": final_job_url,
             "source": raw_job.get("source", "Connector"),
             "source_type": raw_job.get("source_type", "ATS"),
-            "raw_tags": ", ".join(tags),
-            "skills": raw_job.get("skills") or ", ".join(tags),
+            "raw_tags": ", ".join(tags) if tags else None,
+            "skills": raw_job.get("skills") or (", ".join(tags) if tags else None),
             "benefits": raw_job.get("benefits"),
             "description": raw_desc,
             "status": raw_job.get("status", "ACTIVE"),
             "verification_status": raw_job.get("verification_status", "VERIFIED")
         }
-

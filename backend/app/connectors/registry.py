@@ -6,9 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy import func
 
 from backend.app.connectors.base import BaseConnector
-from backend.app.connectors.greenhouse import GreenhouseConnector
-from backend.app.connectors.lever import LeverConnector
-from backend.app.connectors.tech_careers import TechCareersConnector
+from backend.app.connectors.two_stage_crawler import TwoStageJobIngestionPipeline
 from backend.app.connectors.linkedin import LinkedInConnector
 from backend.app.connectors.naukri import NaukriConnector
 from backend.app.connectors.config_company import load_configurable_company_connectors
@@ -16,14 +14,12 @@ from backend.app.models.job import ConnectorHealth, ConnectorExecution
 
 class ConnectorRegistry:
     def __init__(self):
+        # Step 2: Consolidated single implementations per connector / ingestion pipeline
         self._connectors: List[BaseConnector] = [
-            GreenhouseConnector(),
-            LeverConnector(),
-            TechCareersConnector(),
+            TwoStageJobIngestionPipeline(),
             LinkedInConnector(),
             NaukriConnector()
         ]
-        # Automatically load configuration-driven company connectors
         configurable_connectors = load_configurable_company_connectors()
         self._connectors.extend(configurable_connectors)
 
@@ -42,8 +38,8 @@ class ConnectorRegistry:
 
     async def run_single_connector(self, connector: BaseConnector, db: AsyncSession) -> Dict[str, Any]:
         """
-        PART 5 — Accurate Runtime & Metric Measurement Pipeline
-        started_at -> fetch -> normalize -> deduplicate -> save -> finished_at
+        Step 11 & 12: Resilient Execution & Comprehensive Health Metrics Pipeline
+        started_at -> fetch -> validate -> measure metrics -> commit logs
         """
         started_at = datetime.datetime.utcnow()
         t0 = time.time()
@@ -81,7 +77,7 @@ class ConnectorRegistry:
             finished_at=finished_at,
             duration_ms=duration_ms,
             jobs_discovered=jobs_discovered,
-            jobs_inserted=jobs_inserted, # Updated by scheduler pipeline
+            jobs_inserted=jobs_inserted,
             jobs_updated=jobs_updated,
             jobs_skipped=jobs_skipped,
             errors_count=errors_count,
@@ -91,7 +87,7 @@ class ConnectorRegistry:
         db.add(execution)
         await db.commit()
 
-        # Compute dynamic historical rolling average runtime from DB
+        # Dynamic rolling average runtime calculation
         avg_res = await db.execute(
             select(func.avg(ConnectorExecution.duration_ms)).where(ConnectorExecution.connector_name == connector.name)
         )
@@ -134,8 +130,12 @@ class ConnectorRegistry:
     async def run_all_connectors(self, db: AsyncSession) -> List[Dict[str, Any]]:
         all_jobs = []
         for connector in self._connectors:
-            res = await self.run_single_connector(connector, db)
-            all_jobs.extend(res.get("jobs", []))
+            try:
+                res = await self.run_single_connector(connector, db)
+                all_jobs.extend(res.get("jobs", []))
+            except Exception as e:
+                # Step 11: Failure Isolation — One failing connector must never crash others!
+                print(f"[ConnectorRegistry] Connector {connector.name} error: {e}")
         return all_jobs
 
 connector_registry = ConnectorRegistry()

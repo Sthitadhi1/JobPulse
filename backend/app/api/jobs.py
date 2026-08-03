@@ -18,25 +18,27 @@ async def list_jobs(
     experience_level: Optional[str] = Query(None),
     min_salary_lpa: Optional[float] = Query(None),
     company: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
     source: Optional[str] = Query(None),
     source_type: Optional[str] = Query(None),
+    ats_provider: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     verification_status: Optional[str] = Query(None),
     bookmarked_only: Optional[bool] = Query(False),
-    india_or_remote_only: Optional[bool] = Query(False, description="Default filter to India & Remote opportunities"),
+    india_or_remote_only: Optional[bool] = Query(False),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(Job)
 
-    # Filter out removed jobs by default unless requested
+    # Status Filter (Exclude REMOVED by default unless requested)
     if status:
         stmt = stmt.where(Job.status.ilike(f"%{status}%"))
     else:
         stmt = stmt.where(Job.status != "REMOVED")
 
-    # Boolean search filter
+    # Search Query Filter
     if q:
         boolean_cond = SearchEngine.build_boolean_conditions(q)
         if boolean_cond is not None:
@@ -52,12 +54,13 @@ async def list_jobs(
         stmt = stmt.where(Job.location.ilike(f"%{location}%"))
     if remote_type:
         stmt = stmt.where(Job.remote_type.ilike(f"%{remote_type}%"))
+    if department:
+        stmt = stmt.where(Job.department.ilike(f"%{department}%"))
     
-    # PART 14 — Experience Level Search Guardrail
+    # Step 13 — Freshers Filter Guardrail (MUST NEVER return 2+ YOE jobs!)
     if experience_level:
         exp_lower = experience_level.lower()
         if "fresher" in exp_lower or "0-1" in exp_lower:
-            # ONLY return genuine freshers, campus hiring, internships, entry-level! Never 2+ yoe!
             stmt = stmt.where(or_(
                 Job.experience_level == "Fresher",
                 Job.experience_level == "Campus Hiring",
@@ -79,7 +82,8 @@ async def list_jobs(
             stmt = stmt.where(or_(
                 Job.experience_level == "Senior",
                 Job.experience_level == "Lead",
-                Job.experience_level == "4+ YOE (High Exp)"
+                Job.experience_level == "Staff",
+                Job.experience_level == "Principal"
             ))
         else:
             stmt = stmt.where(Job.experience_level.ilike(f"%{experience_level}%"))
@@ -97,24 +101,26 @@ async def list_jobs(
     if bookmarked_only:
         stmt = stmt.where(Job.is_bookmarked == True)
 
-    # Count total
+    # Step 16: Count total records accurately
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_res = await db.execute(count_stmt)
     total_records = total_res.scalar() or 0
 
-    # Paginate
+    # Step 16: Paginate seamlessly
     offset = (page - 1) * limit
     stmt = stmt.order_by(desc(Job.created_at), desc(Job.id)).offset(offset).limit(limit)
 
     res = await db.execute(stmt)
     jobs = res.scalars().all()
 
-    # Format output with verification badges and smart apply URLs (PART 9 & 10)
+    # Step 14: Audit API Response — Preserve exact original URLs returned by connectors!
     job_list = []
     for j in jobs:
-        smart_url = j.external_apply_url or j.job_url or j.source_url or j.apply_url
+        # Step 15: Apply URL resolution priority (external_apply_url -> job_url -> canonical_url)
+        smart_url = j.external_apply_url or j.job_url or j.canonical_url or j.source_url
         job_list.append({
             "id": j.id,
+            "external_job_id": j.external_job_id,
             "title": j.title,
             "company": j.company,
             "department": j.department,
@@ -126,10 +132,11 @@ async def list_jobs(
             "salary_range": j.salary_range,
             "min_salary_lpa": j.min_salary_lpa,
             "max_salary_lpa": j.max_salary_lpa,
-            "job_url": j.job_url or j.apply_url,
-            "source_url": j.source_url or j.apply_url,
+            "job_url": j.job_url,
+            "source_url": j.source_url,
             "external_apply_url": j.external_apply_url,
-            "url": smart_url if smart_url and smart_url != "#" else None, # Smart Apply Target
+            "canonical_url": j.canonical_url or j.job_url,
+            "url": smart_url if smart_url and smart_url != "#" else None,
             "source": j.source,
             "source_type": j.source_type or "ATS",
             "tags": j.raw_tags.split(", ") if j.raw_tags else [],
@@ -155,7 +162,7 @@ async def list_jobs(
             "page": page,
             "limit": limit,
             "total_records": total_records,
-            "total_pages": (total_records + limit - 1) // limit if limit else 1
+            "total_pages": (total_records + limit - 1) // limit if limit > 0 else 1
         }
     }
 
@@ -166,12 +173,13 @@ async def get_job_detail(job_id: int, db: AsyncSession = Depends(get_db)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
     
-    smart_url = job.external_apply_url or job.job_url or job.source_url or job.apply_url
+    smart_url = job.external_apply_url or job.job_url or job.canonical_url or job.source_url
     return {
         "success": True,
         "message": "Job details fetched.",
         "data": {
             "id": job.id,
+            "external_job_id": job.external_job_id,
             "title": job.title,
             "company": job.company,
             "department": job.department,
@@ -183,9 +191,10 @@ async def get_job_detail(job_id: int, db: AsyncSession = Depends(get_db)):
             "salary_range": job.salary_range,
             "min_salary_lpa": job.min_salary_lpa,
             "max_salary_lpa": job.max_salary_lpa,
-            "job_url": job.job_url or job.apply_url,
-            "source_url": job.source_url or job.apply_url,
+            "job_url": job.job_url,
+            "source_url": job.source_url,
             "external_apply_url": job.external_apply_url,
+            "canonical_url": job.canonical_url or job.job_url,
             "url": smart_url if smart_url and smart_url != "#" else None,
             "source": job.source,
             "source_type": job.source_type or "ATS",
@@ -202,7 +211,6 @@ async def get_job_detail(job_id: int, db: AsyncSession = Depends(get_db)):
             "posted_at": job.posted_at.isoformat() if job.posted_at else None
         }
     }
-
 
 @router.post("/{job_id}/bookmark")
 async def toggle_bookmark(job_id: int, db: AsyncSession = Depends(get_db)):

@@ -17,7 +17,7 @@ def is_india_or_remote(location: str) -> bool:
 class GreenhouseConnector(BaseConnector):
     name: str = "Greenhouse ATS"
     source_type: str = "ATS"
-    version: str = "1.0.0"
+    version: str = "2.0.0"
 
     TARGET_COMPANIES = [
         "figma", "stripe", "vercel", "cloudflare", "datadog",
@@ -27,7 +27,7 @@ class GreenhouseConnector(BaseConnector):
 
     async def fetch(self) -> List[Dict[str, Any]]:
         jobs = []
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             for company in self.TARGET_COMPANIES:
                 board_url = f"https://boards.greenhouse.io/{company}"
                 try:
@@ -51,7 +51,7 @@ class GreenhouseConnector(BaseConnector):
                                     "job_url": job_detail_url,
                                     "source_url": board_url,
                                     "external_apply_url": None,
-                                    "salary": "₹12 - ₹18 LPA",
+                                    "salary": None, # PART 8: No fabricated salary data
                                     "description": f"Greenhouse opportunity for {title} at {company.capitalize()}",
                                     "source": self.name,
                                     "source_type": self.source_type
@@ -59,37 +59,4 @@ class GreenhouseConnector(BaseConnector):
                 except Exception:
                     continue
 
-        if not jobs:
-            jobs = [
-                {
-                    "external_job_id": "gh-vercel-101",
-                    "title": "Software Engineer I - Core Backend",
-                    "company": "Vercel",
-                    "location": "Remote / India",
-                    "remote_type": "Remote",
-                    "employment_type": "Full-time",
-                    "job_url": "https://job-boards.greenhouse.io/vercel/jobs/5430088004",
-                    "source_url": "https://boards.greenhouse.io/vercel",
-                    "external_apply_url": "https://vercel.com/careers/software-engineer-core-backend/apply",
-                    "salary": "₹14 - ₹20 LPA",
-                    "description": "Building edge compute infrastructure with Node.js, Rust, and TypeScript.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                },
-                {
-                    "external_job_id": "gh-cf-102",
-                    "title": "Graduate Engineer Trainee (GET)",
-                    "company": "Cloudflare",
-                    "location": "Bengaluru, India / Hybrid",
-                    "remote_type": "Hybrid",
-                    "employment_type": "Full-time",
-                    "job_url": "https://boards.greenhouse.io/cloudflare/jobs/7955378",
-                    "source_url": "https://boards.greenhouse.io/cloudflare",
-                    "external_apply_url": None,
-                    "salary": "₹10 - ₹15 LPA",
-                    "description": "Full-stack cloud networking tools and Go services.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                }
-            ]
         return jobs

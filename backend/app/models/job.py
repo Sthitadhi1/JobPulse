@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey, Index
 from backend.app.database import Base
 
 class User(Base):
@@ -29,7 +29,7 @@ class CompanyRegistry(Base):
     priority = Column(Integer, default=5, index=True) # 1-5
     crawl_interval = Column(Integer, default=60) # minutes
     enabled = Column(Boolean, default=True, index=True)
-    supported_locations = Column(Text, nullable=True) # JSON or comma-separated
+    supported_locations = Column(Text, nullable=True)
     supported_roles = Column(Text, nullable=True)
     tags = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
@@ -40,48 +40,52 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    external_job_id = Column(String(100), nullable=True)
+    external_job_id = Column(String(100), nullable=True, index=True) # Step 18 Index
     title = Column(String(255), nullable=False, index=True)
-    company = Column(String(255), nullable=False, index=True)
-    department = Column(String(150), nullable=True)
-    location = Column(String(255), nullable=False, index=True)
+    company = Column(String(255), nullable=False, index=True) # Step 18 Index
+    department = Column(String(150), nullable=True, index=True)
+    location = Column(String(255), nullable=False, index=True) # Step 18 Index
     country = Column(String(100), default="India", index=True)
     remote_type = Column(String(50), default="Hybrid", index=True) # Remote, Hybrid, On-site
     employment_type = Column(String(50), default="Full-time") # Full-time, Internship, Contract
-    experience_level = Column(String(50), nullable=False, default="Fresher", index=True)
+    experience_level = Column(String(50), nullable=False, default="Fresher", index=True) # Step 18 Index
     salary_range = Column(String(100), nullable=True) # e.g. "₹10 - ₹14 LPA"
     min_salary_lpa = Column(Float, nullable=True, index=True)
     max_salary_lpa = Column(Float, nullable=True, index=True)
     currency = Column(String(10), default="INR")
     
-    # URL Normalization
-    job_url = Column(Text, nullable=False) # URL of individual job listing
-    source_url = Column(Text, nullable=False) # URL of career page / board listing
-    external_apply_url = Column(Text, nullable=True) # Direct employer apply URL
-    apply_url = Column(Text, nullable=True) # Backward compatibility
+    # URL Normalization & Indexing (Step 18)
+    job_url = Column(Text, nullable=False, index=True)
+    source_url = Column(Text, nullable=False)
+    external_apply_url = Column(Text, nullable=True)
+    apply_url = Column(Text, nullable=True)
     canonical_url = Column(Text, nullable=True)
 
-    source = Column(String(100), nullable=False, index=True) # e.g. "Greenhouse", "Lever", "LinkedIn Jobs", "Naukri India"
-    source_type = Column(String(50), default="ATS") # ATS, Job Board, Company
-    raw_tags = Column(String(255), nullable=True) # Tech keywords e.g. "Python, React, FastAPI"
+    source = Column(String(100), nullable=False, index=True) # Step 18 Index
+    source_type = Column(String(50), default="ATS", index=True)
+    raw_tags = Column(String(255), nullable=True)
     skills = Column(Text, nullable=True)
     benefits = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     hash_signature = Column(String(64), unique=True, index=True, nullable=False)
     is_bookmarked = Column(Boolean, default=False, index=True)
 
-    # Persistent Job Tracking & Verification (PART 7, 8, 9)
+    # Step 10: Persistent Job Tracking & Verification
     status = Column(String(50), default="ACTIVE", index=True) # ACTIVE, EXPIRED, FILLED, REMOVED, UNKNOWN
-    verification_status = Column(String(50), default="VERIFIED", index=True) # VERIFIED, PENDING, REMOVED_FROM_SOURCE, FAILED
+    verification_status = Column(String(50), default="VERIFIED", index=True) # Step 18 Index: VERIFIED, PENDING, REMOVED_FROM_SOURCE, FAILED
     first_seen = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     last_seen = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     last_verified = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     verification_count = Column(Integer, default=1)
     consecutive_missing_count = Column(Integer, default=0)
 
-    posted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    posted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True) # Step 18 Index
     discovered_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+# Compound Index for high-performance filter queries
+Index('idx_jobs_company_exp_status', Job.company, Job.experience_level, Job.status)
+Index('idx_jobs_verification_status', Job.verification_status, Job.status)
 
 class SavedSearch(Base):
     __tablename__ = "saved_searches"
@@ -169,4 +173,3 @@ class ConnectorExecution(Base):
     errors_count = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
     status = Column(String(50), default="SUCCESS", index=True)
-

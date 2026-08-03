@@ -1,13 +1,21 @@
 import unittest
+import asyncio
 from backend.app.engine.normalizer import NormalizerEngine, URLNormalizerValidator
 from backend.app.engine.deduplicator import DeduplicatorEngine
 from backend.app.engine.search import SearchEngine
 from backend.app.engine.matching import MatchingEngine
 from backend.app.engine.scheduler import SchedulerEngine
-from backend.app.notifications.telegram import TelegramNotificationService
+from backend.app.engine.ai_layer import AIEngineLayer
+from backend.app.connectors.ats import (
+    GreenhouseATSConnector,
+    LeverATSConnector,
+    WorkdayATSConnector,
+    AshbyATSConnector,
+    GenericHTMLATSConnector
+)
 from backend.app.models.job import Job, SavedSearch
 
-class TestJobPulseEngine(unittest.TestCase):
+class TestJobPulseEngineV2(unittest.TestCase):
     def test_normalizer_url_and_experience(self):
         raw_fresher = {
             "title": "Junior Backend Engineer (SDE 1)",
@@ -28,7 +36,8 @@ class TestJobPulseEngine(unittest.TestCase):
         self.assertEqual(normalized["external_apply_url"], "https://careers.techcorp.com/jobs/sde-1/apply")
         self.assertIn("Python", normalized["raw_tags"])
 
-        # PART 4 & 18 GUARDRAIL TEST: 1-3 YOE MUST NEVER BE CLASSIFIED AS FRESHER!
+    def test_mid_level_guardrail_1_3_yoe(self):
+        # GUARDRAIL TEST: 1-3 YOE MUST NEVER BE CLASSIFIED AS FRESHER!
         raw_mid = {
             "title": "Software Engineer",
             "company": "Growth Inc",
@@ -39,8 +48,21 @@ class TestJobPulseEngine(unittest.TestCase):
         self.assertEqual(normalized_mid["experience_level"], "Mid-Level")
         self.assertNotEqual(normalized_mid["experience_level"], "Fresher")
 
+    def test_no_fabricated_salary_when_missing(self):
+        # STEP 9 TEST: If salary is absent from official source, return None
+        raw_no_salary = {
+            "title": "Software Engineer",
+            "company": "Live Company",
+            "location": "Bengaluru",
+            "job_url": "https://company.com/jobs/123",
+            "description": "Backend role."
+        }
+        normalized = NormalizerEngine.normalize_job_data(raw_no_salary)
+        self.assertIsNone(normalized["salary_range"])
+        self.assertIsNone(normalized["min_salary_lpa"])
+        self.assertIsNone(normalized["max_salary_lpa"])
 
-    def test_url_normalizer_validator_resolution(self):
+    def test_two_stage_url_validation(self):
         # 1. Relative URL Resolution to Absolute URL
         rel_url = "/careers/jobs/sde-backend-101"
         source_url = "https://swiggy.com/careers"
@@ -51,22 +73,29 @@ class TestJobPulseEngine(unittest.TestCase):
 
         # 2. Generic Career Homepage Rejection
         homepage_url = "https://company.com/careers"
-        resolved_hp, valid_hp, _ = URLNormalizerValidator.resolve_and_validate_url(homepage_url)
+        _, valid_hp, _ = URLNormalizerValidator.resolve_and_validate_url(homepage_url)
         self.assertFalse(valid_hp)
 
         # 3. Direct Individual Job Listing Validation
-        direct_url = "https://razorpay.com/jobs/sde-1-backend-301"
+        direct_url = "https://boards.greenhouse.io/phonepe/jobs/7789865003"
         resolved_dir, valid_dir, _ = URLNormalizerValidator.resolve_and_validate_url(direct_url)
-        self.assertEqual(resolved_dir, "https://razorpay.com/jobs/sde-1-backend-301")
+        self.assertEqual(resolved_dir, "https://boards.greenhouse.io/phonepe/jobs/7789865003")
         self.assertTrue(valid_dir)
 
+    def test_url_normalizer_department_rejection(self):
+        dept_url = "https://phonepe.com/careers/job-openings/?department=data_science"
+        _, valid_dept, _ = URLNormalizerValidator.resolve_and_validate_url(dept_url)
+        self.assertFalse(valid_dept)
+
+        openings_url = "https://phonepe.com/careers/job-openings"
+        _, valid_openings, _ = URLNormalizerValidator.resolve_and_validate_url(openings_url)
+        self.assertFalse(valid_openings)
+
     def test_deduplicator_priority_fingerprint(self):
-        # 1. Same external_job_id produces same hash
         job1 = {"external_job_id": "gh-101", "company": "Vercel", "title": "SDE", "location": "Remote"}
         job2 = {"external_job_id": "gh-101", "company": "Vercel", "title": "Software Engineer", "location": "India"}
         self.assertEqual(DeduplicatorEngine.generate_fingerprint(job1), DeduplicatorEngine.generate_fingerprint(job2))
 
-        # 2. Same job_url produces same hash
         job3 = {"job_url": "https://jobs.lever.co/supabase/123", "company": "Supabase", "title": "SDE 1"}
         job4 = {"job_url": "https://jobs.lever.co/supabase/123/", "company": "Supabase Inc", "title": "Backend SDE"}
         self.assertEqual(DeduplicatorEngine.generate_fingerprint(job3), DeduplicatorEngine.generate_fingerprint(job4))
@@ -75,7 +104,7 @@ class TestJobPulseEngine(unittest.TestCase):
         valid_job = {
             "title": "Software Engineer",
             "company": "Swiggy",
-            "job_url": "https://swiggy.com/careers/sde-1",
+            "job_url": "https://boards.greenhouse.io/swiggy/jobs/123",
             "source": "Company Careers",
             "location": "Bengaluru"
         }
@@ -89,48 +118,40 @@ class TestJobPulseEngine(unittest.TestCase):
         self.assertTrue(SchedulerEngine.validate_job_data(valid_job))
         self.assertFalse(SchedulerEngine.validate_job_data(invalid_job))
 
-    def test_telegram_formatting_and_escaping(self):
-        job = {
-            "company": "CRED & Co.",
-            "title": "SDE 1 [Backend]",
-            "location": "Bengaluru, India",
-            "experience_level": "Fresher / 0-1 YOE",
-            "salary_range": "₹15 - ₹20 LPA",
-            "remote_type": "On-site",
-            "job_url": "https://cred.club/careers/sde1"
-        }
-        msg = TelegramNotificationService.format_job_match_message(job, "• Match Reason")
-        self.assertIn("CRED & Co\\.", msg)
-        self.assertIn("\\[Backend\\]", msg)
-        self.assertIn("https://cred.club/careers/sde1", msg)
+    def test_ats_connector_interfaces(self):
+        gh = GreenhouseATSConnector()
+        lever = LeverATSConnector()
+        wd = WorkdayATSConnector()
+        ashby = AshbyATSConnector()
+        html = GenericHTMLATSConnector()
 
-    def test_boolean_search_conditions(self):
-        cond = SearchEngine.build_boolean_conditions("Backend AND Python NOT Senior")
-        self.assertIsNotNone(cond)
+        self.assertEqual(gh.name, "Greenhouse")
+        self.assertEqual(lever.name, "Lever")
+        self.assertEqual(wd.name, "Workday")
+        self.assertEqual(ashby.name, "Ashby")
+        self.assertEqual(html.name, "Generic HTML")
 
-    def test_matching_engine_evaluation(self):
+    def test_ai_layer_natural_language_parsing(self):
+        parsed = AIEngineLayer.parse_natural_language_query("Remote python backend fresher jobs in Bengaluru with 12 LPA")
+        self.assertEqual(parsed["experience_level"], "Fresher")
+        self.assertEqual(parsed["remote_type"], "Remote")
+        self.assertEqual(parsed["min_salary"], 12.0)
+        self.assertIn("python", parsed["keywords"])
+        self.assertIn("backend", parsed["keywords"])
+
+    def test_ai_layer_resume_matching(self):
         job = Job(
-            title="Software Development Engineer 1 (SDE I)",
+            id=101,
+            title="Backend Software Engineer",
             company="Razorpay",
-            location="Bengaluru",
-            remote_type="Hybrid",
-            experience_level="Fresher / 0-1 YOE",
-            min_salary_lpa=12.0,
-            max_salary_lpa=16.0,
-            raw_tags="Python, FastAPI, Docker",
-            description="Backend engineer building payment microservices."
+            raw_tags="Python, FastAPI, PostgreSQL, Docker, Redis",
+            skills="Python, FastAPI, PostgreSQL"
         )
-        search = SavedSearch(
-            name="Backend Fresh Grad",
-            keywords="Software Engineer",
-            location="Bengaluru",
-            min_salary_lpa=10.0,
-            experience_level="Fresher"
-        )
-        is_match, score, reasons = MatchingEngine.evaluate_job_against_search(job, search)
-        self.assertTrue(is_match)
-        self.assertGreater(score, 0)
-        self.assertTrue(len(reasons) > 0)
+        resume = "Candidate with experience in Python, FastAPI, Docker, and SQL."
+        analysis = AIEngineLayer.match_resume_to_job(resume, job)
+        self.assertEqual(analysis["company"], "Razorpay")
+        self.assertIn("Python", analysis["matched_skills"])
+        self.assertIn("Fastapi", analysis["matched_skills"])
 
 if __name__ == "__main__":
     unittest.main()

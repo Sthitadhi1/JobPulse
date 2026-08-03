@@ -6,7 +6,7 @@ from backend.app.connectors.greenhouse import is_india_or_remote
 class LeverConnector(BaseConnector):
     name: str = "Lever ATS"
     source_type: str = "ATS"
-    version: str = "1.0.0"
+    version: str = "2.0.0"
 
     TARGET_COMPANIES = [
         "palantir", "scale", "supabase", "postman", "atlan",
@@ -15,7 +15,7 @@ class LeverConnector(BaseConnector):
 
     async def fetch(self) -> List[Dict[str, Any]]:
         jobs = []
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             for company in self.TARGET_COMPANIES:
                 board_url = f"https://jobs.lever.co/{company}"
                 try:
@@ -39,7 +39,7 @@ class LeverConnector(BaseConnector):
                                     "job_url": job_detail_url,
                                     "source_url": board_url,
                                     "external_apply_url": f"{job_detail_url}/apply" if job_detail_url != "#" else None,
-                                    "salary": "₹11 - ₹16 LPA",
+                                    "salary": None, # PART 8: No fabricated salary data
                                     "description": f"Lever opportunity: {title}",
                                     "source": self.name,
                                     "source_type": self.source_type
@@ -47,22 +47,4 @@ class LeverConnector(BaseConnector):
                 except Exception:
                     continue
 
-        if not jobs:
-            jobs = [
-                {
-                    "external_job_id": "lev-suba-201",
-                    "title": "Backend Software Engineer - SDE 1",
-                    "company": "Supabase",
-                    "location": "Remote / India",
-                    "remote_type": "Remote",
-                    "employment_type": "Full-time",
-                    "job_url": "https://jobs.lever.co/supabase/655f9937-a4ce-4e7d-80e2-a6659af07329",
-                    "source_url": "https://jobs.lever.co/supabase",
-                    "external_apply_url": "https://jobs.lever.co/supabase/655f9937-a4ce-4e7d-80e2-a6659af07329/apply",
-                    "salary": "₹12 - ₹18 LPA",
-                    "description": "PostgreSQL, Go, Elixir realtime database platform.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                }
-            ]
         return jobs

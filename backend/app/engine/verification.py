@@ -3,16 +3,44 @@ import httpx
 from typing import List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from backend.app.models.job import Job, ConnectorHealth, ConnectorExecution
+from backend.app.models.job import Job
 
 class VerificationEngine:
-    MISSING_THRESHOLD = 3 # Require 3 consecutive missing cycles before marking REMOVED
+    MISSING_THRESHOLD = 3 # Require 3 consecutive missing cycles before marking REMOVED / EXPIRED
+
+    @classmethod
+    async def verify_single_job(cls, client: httpx.AsyncClient, job: Job) -> str:
+        """
+        Step 7 & 10: Head request -> GET request -> 200 response -> Verification
+        Returns new status: VERIFIED, REMOVED_FROM_SOURCE, or PENDING
+        """
+        target_url = job.external_apply_url or job.job_url
+        if not target_url or target_url == "#":
+            return "PENDING"
+
+        try:
+            resp = await client.head(target_url, timeout=5.0)
+            if resp.status_code in [200, 301, 302]:
+                return "VERIFIED"
+            elif resp.status_code == 404:
+                return "REMOVED_FROM_SOURCE"
+            else:
+                # GET fallback check
+                get_resp = await client.get(target_url, timeout=5.0)
+                if get_resp.status_code == 200:
+                    return "VERIFIED"
+                elif get_resp.status_code == 404:
+                    return "REMOVED_FROM_SOURCE"
+        except Exception:
+            pass
+
+        return "PENDING"
 
     @classmethod
     async def verify_jobs_batch(cls, db: AsyncSession, active_jobs: List[Job]) -> Tuple[int, int]:
         """
-        Performs verification checks for active jobs in DB.
-        Updates last_verified, verification_count, verification_status.
+        Step 10: Persistent Standalone Verification Engine.
+        Updates last_verified, verification_count, verification_status, status.
         Returns (verified_count, removed_count).
         """
         if not active_jobs:
@@ -22,32 +50,26 @@ class VerificationEngine:
         removed_count = 0
         now = datetime.datetime.utcnow()
 
-        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
             for job in active_jobs:
-                target_url = job.external_apply_url or job.job_url
-                if not target_url or target_url == "#":
-                    job.verification_status = "PENDING"
-                    continue
+                v_res = await cls.verify_single_job(client, job)
 
-                try:
-                    # Light HEAD / GET check for availability
-                    resp = await client.head(target_url)
-                    if resp.status_code in [200, 301, 302]:
-                        job.last_verified = now
-                        job.verification_status = "VERIFIED"
-                        job.verification_count = (job.verification_count or 1) + 1
-                        job.consecutive_missing_count = 0
-                        verified_count += 1
-                    elif resp.status_code == 404:
-                        job.consecutive_missing_count = (job.consecutive_missing_count or 0) + 1
-                        job.verification_status = "REMOVED_FROM_SOURCE"
-                        if job.consecutive_missing_count >= cls.MISSING_THRESHOLD:
-                            job.status = "REMOVED"
-                            removed_count += 1
-                    else:
-                        job.verification_status = "PENDING"
-                except Exception:
-                    # Network timeout / temporary connection error -> NEVER remove job!
+                if v_res == "VERIFIED":
+                    job.last_verified = now
+                    job.verification_status = "VERIFIED"
+                    job.verification_count = (job.verification_count or 1) + 1
+                    job.consecutive_missing_count = 0
+                    if job.status == "UNKNOWN":
+                        job.status = "ACTIVE"
+                    verified_count += 1
+                elif v_res == "REMOVED_FROM_SOURCE":
+                    job.consecutive_missing_count = (job.consecutive_missing_count or 0) + 1
+                    job.verification_status = "REMOVED_FROM_SOURCE"
+                    if job.consecutive_missing_count >= cls.MISSING_THRESHOLD:
+                        job.status = "REMOVED"
+                        removed_count += 1
+                else:
+                    # Connection error or timeout -> Do NOT remove! Mark UNKNOWN or PENDING
                     job.verification_status = "PENDING"
 
         await db.commit()
@@ -56,9 +78,7 @@ class VerificationEngine:
     @classmethod
     async def handle_missing_jobs(cls, db: AsyncSession, source_name: str, current_discovered_signatures: set) -> Tuple[int, int]:
         """
-        Compares currently discovered job signatures against active jobs stored for source_name.
-        Increments missing count for un-discovered jobs and transitions to REMOVED only after threshold.
-        Returns (verified_count, removed_count).
+        Step 10: Missing jobs are verified multiple times before status transitions.
         """
         result = await db.execute(
             select(Job).where(Job.source == source_name, Job.status == "ACTIVE")
@@ -77,7 +97,6 @@ class VerificationEngine:
                 job.consecutive_missing_count = 0
                 verified_count += 1
             else:
-                # Job not found in current crawl cycle
                 job.consecutive_missing_count = (job.consecutive_missing_count or 0) + 1
                 if job.consecutive_missing_count >= cls.MISSING_THRESHOLD:
                     job.status = "REMOVED"

@@ -1,14 +1,24 @@
 import httpx
 from typing import List, Dict, Any
 from backend.app.connectors.base import BaseConnector
-from backend.app.connectors.greenhouse import is_india_or_remote
+from backend.app.engine.normalizer import URLNormalizerValidator
 
 class NaukriConnector(BaseConnector):
     name: str = "Naukri India"
     source_type: str = "Job Board"
-    version: str = "1.0.0"
+    version: str = "2.0.0"
+
+    async def stage1_discover(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return []
+
+    async def stage2_extract(self, discovery_item: Dict[str, Any]) -> Dict[str, Any]:
+        return {}
 
     async def fetch(self) -> List[Dict[str, Any]]:
+        """
+        Step 3 & 9 Compliance: Zero hardcoded mock job fallbacks.
+        Only returns real live scraped data from official Guest API.
+        """
         jobs = []
         source_url = "https://www.naukri.com/software-engineer-jobs"
         async with httpx.AsyncClient(timeout=6.0, headers={"User-Agent": "Mozilla/5.0", "appid": "109", "systemid": "Naukri"}) as client:
@@ -21,11 +31,13 @@ class NaukriConnector(BaseConnector):
                         title = item.get("title", "")
                         comp = item.get("companyName", "")
                         loc = item.get("placeholders", [{}])[0].get("label", "India")
-                        sal = item.get("placeholders", [{}, {}])[1].get("label", "₹8 - ₹15 LPA")
+                        sal = item.get("placeholders", [{}, {}])[1].get("label") if len(item.get("placeholders", [])) > 1 else None
                         url_path = item.get("staticUrl", "#")
                         job_detail_url = f"https://www.naukri.com{url_path}" if url_path.startswith("/") else url_path
+                        
+                        clean_url, is_valid, _ = URLNormalizerValidator.resolve_and_validate_url(job_detail_url, source_url)
 
-                        if is_india_or_remote(loc):
+                        if is_valid:
                             jobs.append({
                                 "external_job_id": f"naukri-{item.get('jobId', hash(title+comp))}",
                                 "title": title,
@@ -33,10 +45,10 @@ class NaukriConnector(BaseConnector):
                                 "location": loc,
                                 "remote_type": "Remote" if "remote" in loc.lower() else ("Hybrid" if "hybrid" in loc.lower() else "On-site"),
                                 "employment_type": "Full-time",
-                                "job_url": job_detail_url,
+                                "job_url": clean_url,
                                 "source_url": source_url,
-                                "external_apply_url": job_detail_url,
-                                "salary": sal,
+                                "external_apply_url": clean_url,
+                                "salary": sal if sal and "not disclosed" not in sal.lower() else None,
                                 "description": f"Naukri opportunity for {title} at {comp} ({loc})",
                                 "source": self.name,
                                 "source_type": self.source_type
@@ -44,37 +56,4 @@ class NaukriConnector(BaseConnector):
             except Exception:
                 pass
 
-        if not jobs:
-            jobs = [
-                {
-                    "external_job_id": "nk-tcs-601",
-                    "title": "Assistant System Engineer - Trainee (Fresher)",
-                    "company": "TCS",
-                    "location": "Bengaluru / Pune / Hyderabad",
-                    "remote_type": "On-site",
-                    "employment_type": "Full-time",
-                    "job_url": "https://www.naukri.com/job-listings-tcs-aset-10023456",
-                    "source_url": source_url,
-                    "external_apply_url": "https://ibegin.tcs.com/iBegin/jobs",
-                    "salary": "₹7 - ₹10 LPA",
-                    "description": "TCS Digital & Ninja entry-level software engineering roles in Java, Python, C++.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                },
-                {
-                    "external_job_id": "nk-zoma-603",
-                    "title": "Backend Developer - SDE 1",
-                    "company": "Zomato",
-                    "location": "Gurugram, Haryana, India",
-                    "remote_type": "On-site",
-                    "employment_type": "Full-time",
-                    "job_url": "https://www.naukri.com/job-listings-zomato-sde1-998877",
-                    "source_url": source_url,
-                    "external_apply_url": "https://www.zomato.com/careers/backend-developer-sde1",
-                    "salary": "₹14 - ₹18 LPA",
-                    "description": "Building high-performance food delivery order dispatch systems in Golang, Node.js.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                }
-            ]
         return jobs

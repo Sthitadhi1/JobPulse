@@ -2,16 +2,26 @@ import httpx
 import re
 from typing import List, Dict, Any
 from backend.app.connectors.base import BaseConnector
-from backend.app.connectors.greenhouse import is_india_or_remote
+from backend.app.connectors.ats.greenhouse import URLNormalizerValidator
 
 class LinkedInConnector(BaseConnector):
     name: str = "LinkedIn Jobs"
     source_type: str = "Job Board"
-    version: str = "1.0.0"
+    version: str = "2.0.0"
 
     SEARCH_KEYWORDS = ["Software Engineer", "Backend Engineer", "Full Stack Engineer", "AI Engineer"]
 
+    async def stage1_discover(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return []
+
+    async def stage2_extract(self, discovery_item: Dict[str, Any]) -> Dict[str, Any]:
+        return {}
+
     async def fetch(self) -> List[Dict[str, Any]]:
+        """
+        Step 3 & 9 Compliance: Zero hardcoded mock job fallbacks.
+        Only returns real live scraped data from official Guest API.
+        """
         jobs = []
         source_url = "https://www.linkedin.com/jobs/search"
         async with httpx.AsyncClient(timeout=6.0, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}) as client:
@@ -30,8 +40,10 @@ class LinkedInConnector(BaseConnector):
                             comp = companies[i].strip()
                             loc = locations[i].strip()
                             job_detail_url = links[i] if i < len(links) else "https://www.linkedin.com/jobs"
+                            
+                            clean_url, is_valid, _ = URLNormalizerValidator.resolve_and_validate_url(job_detail_url, source_url)
 
-                            if is_india_or_remote(loc):
+                            if is_valid:
                                 jobs.append({
                                     "external_job_id": f"li-{hash(title + comp)}",
                                     "title": title,
@@ -39,10 +51,10 @@ class LinkedInConnector(BaseConnector):
                                     "location": loc,
                                     "remote_type": "Remote" if "remote" in loc.lower() else ("Hybrid" if "hybrid" in loc.lower() else "On-site"),
                                     "employment_type": "Full-time",
-                                    "job_url": job_detail_url,
+                                    "job_url": clean_url,
                                     "source_url": source_url,
-                                    "external_apply_url": job_detail_url,
-                                    "salary": "₹10 - ₹18 LPA",
+                                    "external_apply_url": clean_url,
+                                    "salary": None, # Zero fabrication
                                     "description": f"LinkedIn job posting for {title} at {comp} ({loc})",
                                     "source": self.name,
                                     "source_type": self.source_type
@@ -50,37 +62,4 @@ class LinkedInConnector(BaseConnector):
                 except Exception:
                     continue
 
-        if not jobs:
-            jobs = [
-                {
-                    "external_job_id": "li-msft-501",
-                    "title": "Software Engineer I (SDE 1)",
-                    "company": "Microsoft",
-                    "location": "Bengaluru, Karnataka, India",
-                    "remote_type": "Hybrid",
-                    "employment_type": "Full-time",
-                    "job_url": "https://www.linkedin.com/jobs/view/microsoft-sde1-4123891023",
-                    "source_url": source_url,
-                    "external_apply_url": "https://careers.microsoft.com/us/en/job/1654321/Software-Engineer-I",
-                    "salary": "₹16 - ₹24 LPA",
-                    "description": "Azure cloud developer team, C#, Distributed systems, REST APIs.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                },
-                {
-                    "external_job_id": "li-goog-502",
-                    "title": "Software Engineer, Early Career",
-                    "company": "Google",
-                    "location": "Bengaluru / Hyderabad, India",
-                    "remote_type": "Hybrid",
-                    "employment_type": "Full-time",
-                    "job_url": "https://www.linkedin.com/jobs/view/google-sde-4123891024",
-                    "source_url": source_url,
-                    "external_apply_url": "https://www.google.com/about/careers/applications/jobs/results/12345-software-engineer",
-                    "salary": "₹18 - ₹28 LPA",
-                    "description": "Core Infrastructure and Google Cloud Platform services in C++ and Go.",
-                    "source": self.name,
-                    "source_type": self.source_type
-                }
-            ]
         return jobs
