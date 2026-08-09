@@ -46,6 +46,21 @@ async def run_15min_dead_link_worker():
         except Exception as e:
             print(f"[15-MIN WORKER ERROR] {e}")
 
+async def run_hourly_job_update_worker():
+    """
+    Continuous Background Worker (runs every 1 hour / 3600 seconds):
+    Runs the discovery cycle to update jobs hour to hour.
+    """
+    while True:
+        try:
+            await asyncio.sleep(3600) # 1 hour
+            print("[HOURLY WORKER] Starting continuous job discovery cycle...")
+            async with AsyncSessionLocal() as session:
+                await scheduler_engine.run_discovery_cycle(session)
+                print("[HOURLY WORKER] Job discovery cycle complete.")
+        except Exception as e:
+            print(f"[HOURLY WORKER ERROR] {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize DB tables
@@ -54,6 +69,7 @@ async def lifespan(app: FastAPI):
     # Launch startup seed and 15-minute continuous dead-link worker
     asyncio.create_task(run_startup_seed())
     asyncio.create_task(run_15min_dead_link_worker())
+    asyncio.create_task(run_hourly_job_update_worker())
 
     yield
 
