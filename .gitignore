@@ -25,8 +25,5 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Markdown documentation and registry files
+# Markdown documentation files
 *.md
-!README.md
-
-

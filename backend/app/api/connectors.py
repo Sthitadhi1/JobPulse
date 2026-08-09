@@ -7,7 +7,24 @@ from backend.app.database import get_db
 from backend.app.models.job import ConnectorHealth, ConnectorExecution, Job, CompanyRegistry
 from backend.app.engine.scheduler import scheduler_engine
 
+from backend.app.engine.verification import VerificationEngine
+
 router = APIRouter(prefix="/admin/connectors", tags=["Admin Connectors"])
+
+@router.post("/dead-links/verify")
+async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db)):
+    """
+    Manual trigger to verify active jobs and auto-remove 404/dead listings immediately.
+    """
+    res = await db.execute(select(Job).where(Job.status == "ACTIVE"))
+    active_jobs = res.scalars().all()
+    v_count, r_count = await VerificationEngine.verify_jobs_batch(db, active_jobs)
+    return {
+        "success": True,
+        "message": f"Dead-link verification pass completed.",
+        "verified_count": v_count,
+        "removed_count": r_count
+    }
 
 @router.get("/diagnostics")
 async def get_connector_diagnostics(db: AsyncSession = Depends(get_db)):
@@ -168,5 +185,20 @@ async def trigger_manual_sync(db: AsyncSession = Depends(get_db)):
         "success": True,
         "message": "Manual connector discovery cycle completed.",
         "data": result
+    }
+
+@router.post("/verify-dead-links")
+async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db)):
+    """
+    Manual trigger to verify active jobs and auto-remove 404/dead listings immediately.
+    """
+    res = await db.execute(select(Job).where(Job.status == "ACTIVE").limit(50))
+    active_jobs = res.scalars().all()
+    v_count, r_count = await VerificationEngine.verify_jobs_batch(db, active_jobs)
+    return {
+        "success": True,
+        "message": f"Dead link verification pass completed on batch of {len(active_jobs)} active listings.",
+        "verified_count": v_count,
+        "removed_count": r_count
     }
 

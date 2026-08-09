@@ -39,11 +39,24 @@ class DeduplicatorEngine:
         return hashlib.sha256(raw_str.encode('utf-8')).hexdigest()
 
     @classmethod
+    def deduplicate_in_memory(cls, jobs_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Fast in-memory deduplication for live user search queries.
+        Merges duplicate jobs originating from multiple sources into a single card.
+        """
+        seen = {}
+        for job in jobs_data:
+            fp = cls.generate_fingerprint(job)
+            if fp not in seen:
+                seen[fp] = job
+            else:
+                existing_source = seen[fp].get("source", "")
+                if job.get("source") and job["source"] not in existing_source:
+                    seen[fp]["source"] = f"{existing_source}, {job['source']}"
+        return list(seen.values())
+
+    @classmethod
     async def process_and_update_jobs(cls, db: AsyncSession, jobs_data: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Deduplicates incoming batch, updates existing matching jobs in-place,
-        and returns (new_unique_jobs_to_insert, count_of_updated_jobs).
-        """
         if not jobs_data:
             return [], 0
 
@@ -55,46 +68,32 @@ class DeduplicatorEngine:
             prepared_jobs.append(job)
             fingerprints.append(fp)
 
-        # Query existing jobs matching fingerprints in chunks of 100 to avoid SQLite host parameter limits
         existing_jobs = {}
         chunk_size = 100
         for i in range(0, len(fingerprints), chunk_size):
-            fp_chunk = fingerprints[i:i + chunk_size]
-            result = await db.execute(select(Job).where(Job.hash_signature.in_(fp_chunk)))
-            for j in result.scalars().all():
+            chunk_fps = fingerprints[i:i + chunk_size]
+            res = await db.execute(select(Job).where(Job.hash_signature.in_(chunk_fps)))
+            for j in res.scalars().all():
                 existing_jobs[j.hash_signature] = j
 
-
-        unique_jobs_to_insert = []
-        seen_in_batch = set()
+        new_jobs = []
         updated_count = 0
         now = datetime.datetime.utcnow()
 
-        for job_data in prepared_jobs:
-            fp = job_data["hash_signature"]
+        for job in prepared_jobs:
+            fp = job["hash_signature"]
             if fp in existing_jobs:
-                # Update existing job in-place (PART 7 & 8)
-                job_obj = existing_jobs[fp]
-                job_obj.last_seen = now
-                job_obj.last_verified = now
-                job_obj.verification_count = (job_obj.verification_count or 1) + 1
-                job_obj.status = "ACTIVE"
-                job_obj.verification_status = "VERIFIED"
-                job_obj.consecutive_missing_count = 0
-                if job_data.get("external_apply_url"):
-                    job_obj.external_apply_url = job_data.get("external_apply_url")
+                existing_j = existing_jobs[fp]
+                existing_j.last_seen = now
+                existing_j.last_verified = now
+                if job.get("salary_range") and not existing_j.salary_range:
+                    existing_j.salary_range = job["salary_range"]
+                    existing_j.min_salary_lpa = job.get("min_salary_lpa")
+                    existing_j.max_salary_lpa = job.get("max_salary_lpa")
+                if job.get("external_apply_url") and not existing_j.external_apply_url:
+                    existing_j.external_apply_url = job["external_apply_url"]
                 updated_count += 1
-            elif fp not in seen_in_batch:
-                unique_jobs_to_insert.append(job_data)
-                seen_in_batch.add(fp)
+            else:
+                new_jobs.append(job)
 
-        if updated_count > 0:
-            await db.commit()
-
-        return unique_jobs_to_insert, updated_count
-
-    @classmethod
-    async def filter_duplicates(cls, db: AsyncSession, jobs_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        new_jobs, _ = await cls.process_and_update_jobs(db, jobs_data)
-        return new_jobs
-
+        return new_jobs, updated_count

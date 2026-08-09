@@ -1,5 +1,5 @@
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from backend.app.connectors.base import BaseConnector
 
 INDIA_REMOTE_KEYWORDS = [
@@ -24,6 +24,12 @@ class GreenhouseConnector(BaseConnector):
         "rippling", "grammarly", "notion", "retool", "brex",
         "sourcegraph", "postman", "hasura"
     ]
+
+    async def stage1_discover(self, company: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return []
+
+    async def stage2_extract(self, discovery_item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        return None
 
     async def fetch(self) -> List[Dict[str, Any]]:
         jobs = []

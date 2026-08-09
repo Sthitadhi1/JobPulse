@@ -8,6 +8,9 @@ let totalFeedPages = 1;
 let totalFeedRecords = 0;
 let isLoadingMoreFeed = false;
 
+let selectedSalaryMin = null;
+let selectedSalaryMax = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initNavigation();
@@ -16,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initModals();
   initTelegramView();
   initInfiniteScroll();
+  initApplicationWorkspaceEvents();
+  initSpotlightEffect();
   
   // Initial data load
   loadJobsFeed(true);
@@ -55,6 +60,7 @@ function initNavigation() {
       // Load tab-specific data
       if (tabTarget === 'jobs') loadJobsFeed(true);
       if (tabTarget === 'searches') loadSavedSearches();
+      if (tabTarget === 'applications') loadApplicationWorkspace();
       if (tabTarget === 'bookmarks') loadBookmarksFeed();
       if (tabTarget === 'analytics') loadAnalytics();
       if (tabTarget === 'connectors') loadConnectorHealth();
@@ -65,7 +71,21 @@ function initNavigation() {
   document.getElementById('trigger-sync-panel-btn')?.addEventListener('click', triggerManualSync);
 }
 
-/* JOBS FEED & INFINITE SCROLL PAGINATION (BUG 1 FIX) */
+/* ACETERNITY UI SPOTLIGHT MOUSE TRACKING */
+function initSpotlightEffect() {
+  document.addEventListener('mousemove', (e) => {
+    const cards = document.querySelectorAll('.job-card, .bento-card, .kanban-card');
+    cards.forEach(card => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      card.style.setProperty('--mouse-x', `${x}px`);
+      card.style.setProperty('--mouse-y', `${y}px`);
+    });
+  });
+}
+
+/* JOBS FEED & USER-DRIVEN SEARCH */
 async function loadJobsFeed(reset = true) {
   const container = document.getElementById('jobs-container');
   const loadMoreBtn = document.getElementById('load-more-btn');
@@ -74,20 +94,21 @@ async function loadJobsFeed(reset = true) {
   if (reset) {
     currentFeedPage = 1;
     currentJobs = [];
-    container.innerHTML = '<div class="loading-skeleton">Loading live discovery feed...</div>';
+    container.innerHTML = '<div class="loading-skeleton">Searching live opportunities...</div>';
   }
 
   const q = document.getElementById('job-search-input').value.trim();
   const exp = document.getElementById('filter-exp').value;
   const remote = document.getElementById('filter-remote').value;
-  const minSal = document.getElementById('filter-salary').value;
+  const minSal = selectedSalaryMin || document.getElementById('filter-salary').value;
+  const maxSal = selectedSalaryMax;
 
-  let url = `${API_BASE}/jobs?page=${currentFeedPage}&limit=30&india_or_remote_only=true`;
-  if (q) url += `&q=${encodeURIComponent(q)}`;
+  let url = `${API_BASE}/jobs/search?page=${currentFeedPage}&limit=30`;
+  if (q) url += `&keyword=${encodeURIComponent(q)}`;
   if (exp) url += `&experience_level=${encodeURIComponent(exp)}`;
   if (remote) url += `&remote_type=${encodeURIComponent(remote)}`;
-  if (minSal) url += `&min_salary_lpa=${encodeURIComponent(minSal)}`;
-  if (isBookmarkedOnlyFilter) url += `&bookmarked_only=true`;
+  if (minSal) url += `&salary_min=${encodeURIComponent(minSal)}`;
+  if (maxSal) url += `&salary_max=${encodeURIComponent(maxSal)}`;
 
   isLoadingMoreFeed = true;
   if (loadMoreSpinner) loadMoreSpinner.classList.remove('hidden');
@@ -171,21 +192,18 @@ function initInfiniteScroll() {
 function renderJobsGrid(container, jobs) {
   if (!jobs || jobs.length === 0) {
     container.innerHTML = `
-      <div class="card card-padded text-center">
-        <h3>No matching jobs found</h3>
-        <p class="text-muted">Try adjusting your search query, location, or experience level filters.</p>
+      <div class="card card-padded text-center" style="grid-column: 1 / -1;">
+        <h3>No matching opportunities found</h3>
+        <p class="text-muted">Try searching with a specific keyword, salary chip, or location.</p>
       </div>`;
     return;
   }
 
   container.innerHTML = jobs.map(job => {
-    // PART 10 — Smart Apply Links Priority:
-    // external_apply_url -> job_url -> url. Never redirect to generic homepages.
     const applyTarget = job.external_apply_url || job.job_url || (job.url !== '#' ? job.url : null);
     
-    // PART 9 — Verification Badge Indicator
     const vStatus = job.verification_status || 'VERIFIED';
-    let vBadgeHtml = '<span class="badge badge-pulse" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">🟢 Verified Today</span>';
+    let vBadgeHtml = '<span class="badge badge-pulse">🟢 Verified Today</span>';
     if (vStatus === 'PENDING') {
       vBadgeHtml = '<span class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);">🟡 Verification Pending</span>';
     } else if (vStatus === 'REMOVED_FROM_SOURCE' || job.status === 'REMOVED') {
@@ -202,14 +220,13 @@ function renderJobsGrid(container, jobs) {
         Apply Listing ↗
       </a>` : `
       <button class="btn btn-sm btn-outline btn-disabled" disabled>
-        Application link unavailable
+        Link unavailable
       </button>`;
 
-    const firstSeenDate = formatDate(job.first_seen || job.created_at);
-    const lastVerifiedDate = formatDate(job.last_verified || job.created_at);
+    const salaryDisp = job.salary_range ? `💰 ${escapeHtml(job.salary_range)}` : '💰 Disclosed on App';
 
     return `
-      <div class="job-card card">
+      <div class="job-card">
         <div class="job-card-header">
           <div>
             <div class="company-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
@@ -228,7 +245,7 @@ function renderJobsGrid(container, jobs) {
           <span class="detail-item">📍 ${escapeHtml(job.location)}</span>
           <span class="detail-item">🏠 ${escapeHtml(job.remote_type || 'Hybrid')}</span>
           <span class="detail-item">💼 ${escapeHtml(job.experience_level || 'Fresher')}</span>
-          <span class="detail-item">💰 ${escapeHtml(job.salary_range || 'Disclosed on App')}</span>
+          <span class="detail-item">${salaryDisp}</span>
         </div>
 
         <div class="job-tags">
@@ -236,8 +253,11 @@ function renderJobsGrid(container, jobs) {
         </div>
 
         <div class="job-card-footer">
-          <small class="posted-date">Via ${escapeHtml(job.source)} • Seen: ${firstSeenDate} • Verified: ${lastVerifiedDate}</small>
+          <small class="posted-date">Via ${escapeHtml(job.source)} • Seen: ${formatDate(job.first_seen)}</small>
           <div class="action-buttons">
+            <button class="btn btn-sm btn-ghost" onclick="saveToApplicationWorkspace('${escapeHtml(job.company)}', '${escapeHtml(job.title)}', '${escapeHtml(applyTarget || '')}')">
+              💼 Track
+            </button>
             <button class="btn btn-sm btn-ghost" onclick="copyJobLink('${escapeHtml(applyTarget || '')}')" title="Copy listing URL">
               🔗 Share
             </button>
@@ -248,7 +268,6 @@ function renderJobsGrid(container, jobs) {
     `;
   }).join('');
 }
-
 
 function formatDate(isoStr) {
   if (!isoStr) return 'Recently';
@@ -267,6 +286,112 @@ function copyJobLink(url) {
   if (!url) return alert('Application URL unavailable.');
   navigator.clipboard.writeText(url);
   alert('Job link copied to clipboard!');
+}
+
+/* APPLICATION WORKSPACE KANBAN */
+async function loadApplicationWorkspace() {
+  const container = document.getElementById('kanban-board-container');
+  container.innerHTML = '<div class="loading-skeleton">Loading Application Kanban Workspace...</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/applications`);
+    const result = await res.json();
+
+    if (result.success) {
+      const apps = result.data || [];
+      const columns = ['Saved', 'Applied', 'OA Scheduled', 'Interview', 'Offer', 'Rejected'];
+
+      container.innerHTML = columns.map(col => {
+        const colApps = apps.filter(a => a.status === col);
+        return `
+          <div class="kanban-column">
+            <div class="kanban-header">
+              <span class="kanban-title">${col}</span>
+              <span class="badge">${colApps.length}</span>
+            </div>
+            <div class="kanban-cards-wrapper" style="display: flex; flex-direction: column; gap: 10px;">
+              ${colApps.length === 0 ? '<small class="text-muted" style="text-align: center; padding: 10px;">No applications</small>' : colApps.map(a => `
+                <div class="kanban-card">
+                  <strong style="font-size: 14px;">${escapeHtml(a.role)}</strong>
+                  <small class="text-muted">${escapeHtml(a.company)}</small>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                    <span class="tag">${escapeHtml(a.source || 'Manual')}</span>
+                    <select onchange="updateApplicationStatus(${a.id}, this.value)" style="font-size: 11px; padding: 2px 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;">
+                      ${columns.map(c => `<option value="${c}" ${c === a.status ? 'selected' : ''}>${c}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading Application Workspace.</div>`;
+  }
+}
+
+async function updateApplicationStatus(id, newStatus) {
+  try {
+    await fetch(`${API_BASE}/applications/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    loadApplicationWorkspace();
+  } catch (err) {
+    alert('Status update failed: ' + err.message);
+  }
+}
+
+async function saveToApplicationWorkspace(company, role, jobUrl) {
+  try {
+    const res = await fetch(`${API_BASE}/applications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, role, job_url: jobUrl, status: 'Saved' })
+    });
+    const result = await res.json();
+    if (result.success) {
+      alert(`Tracked ${role} at ${company} in Application Workspace!`);
+    }
+  } catch (err) {
+    alert('Failed to track application: ' + err.message);
+  }
+}
+
+function initApplicationWorkspaceEvents() {
+  document.getElementById('export-applications-btn')?.addEventListener('click', () => {
+    window.open(`${API_BASE}/applications/export?format=csv`, '_blank');
+  });
+
+  const csvInput = document.getElementById('csv-file-input');
+  csvInput?.addEventListener('change', async () => {
+    if (!csvInput.files || csvInput.files.length === 0) return;
+    const formData = new FormData();
+    formData.append('file', csvInput.files[0]);
+
+    try {
+      const res = await fetch(`${API_BASE}/applications/import`, {
+        method: 'POST',
+        body: formData
+      });
+      const result = await res.json();
+      alert(result.message);
+      loadApplicationWorkspace();
+    } catch (err) {
+      alert('CSV import failed: ' + err.message);
+    }
+  });
+
+  document.getElementById('add-custom-application-btn')?.addEventListener('click', () => {
+    const comp = prompt('Company Name:');
+    if (!comp) return;
+    const role = prompt('Role Title:');
+    if (!role) return;
+    saveToApplicationWorkspace(comp, role, '#');
+  });
 }
 
 /* BOOKMARK TOGGLING */
@@ -355,28 +480,14 @@ async function loadBookmarksFeed() {
 /* ANALYTICS VIEW */
 async function loadAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/analytics/dashboard`);
+    const res = await fetch(`${API_BASE}/dashboard/metrics`);
     const result = await res.json();
-    if (result.success && result.data) {
-      const data = result.data;
-      if (document.getElementById('stat-freshers-today')) document.getElementById('stat-freshers-today').textContent = data.freshers_jobs_today || 0;
-      if (document.getElementById('stat-internships-today')) document.getElementById('stat-internships-today').textContent = data.internships_today || 0;
-      if (document.getElementById('stat-mid-today')) document.getElementById('stat-mid-today').textContent = data.mid_level_jobs_today || 0;
-      if (document.getElementById('stat-senior-today')) document.getElementById('stat-senior-today').textContent = data.senior_jobs_today || 0;
-      if (document.getElementById('stat-verified-today')) document.getElementById('stat-verified-today').textContent = data.jobs_verified_today || 0;
-      if (document.getElementById('stat-comp-freshers')) document.getElementById('stat-comp-freshers').textContent = data.companies_hiring_freshers || 0;
-      if (document.getElementById('stat-verification-rate')) document.getElementById('stat-verification-rate').textContent = `${data.verification_success_rate || 100}%`;
-      if (document.getElementById('stat-companies')) document.getElementById('stat-companies').textContent = data.companies_tracked || '300+';
-
-      const topList = document.getElementById('top-companies-list');
-      if (topList && data.most_active_companies) {
-        topList.innerHTML = data.most_active_companies.map(c => `
-          <li style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--border-color);">
-            <strong>${escapeHtml(c.company)}</strong>
-            <span class="badge badge-outline">${c.count} active roles</span>
-          </li>
-        `).join('');
-      }
+    if (result.success) {
+      const data = result.metrics;
+      document.getElementById('stat-total-jobs').textContent = data.total_discovered_jobs || 0;
+      document.getElementById('stat-remote-jobs').textContent = data.total_applications || 0;
+      document.getElementById('stat-fresher-jobs').textContent = data.active_interviews || 0;
+      document.getElementById('stat-avg-salary').textContent = `${data.response_rate_pct}%`;
     }
   } catch (err) {
     console.error('Analytics error:', err);
@@ -401,7 +512,6 @@ async function loadConnectorHealth() {
               <th>Source Type</th>
               <th>Health Status</th>
               <th>Success Rate</th>
-              <th>Verification Rate</th>
               <th>Jobs Last Run</th>
               <th>Total Indexed</th>
               <th>Avg Runtime</th>
@@ -415,7 +525,6 @@ async function loadConnectorHealth() {
                 <td><span class="badge-source badge-source-${(c.source_type || 'ats').toLowerCase()}">${c.source_type}</span></td>
                 <td><span class="badge ${c.health_score === 'HEALTHY' ? 'badge-pulse' : 'badge-danger'}">${c.health_score || c.status}</span></td>
                 <td><strong>${c.success_rate || 100}%</strong></td>
-                <td><strong>${c.verification_rate || 100}%</strong></td>
                 <td>${c.jobs_found_last_run}</td>
                 <td>${c.total_jobs_indexed}</td>
                 <td><strong>${c.average_runtime_ms} ms</strong></td>
@@ -431,10 +540,9 @@ async function loadConnectorHealth() {
   }
 }
 
-
 async function triggerManualSync() {
   const syncBtn = document.getElementById('sync-now-btn');
-  if (syncBtn) syncBtn.textContent = '🔄 Syncing...';
+  if (syncBtn) syncBtn.innerHTML = '<span>🔄 Syncing...</span>';
 
   try {
     const res = await fetch(`${API_BASE}/admin/connectors/sync`, { method: 'POST' });
@@ -447,7 +555,7 @@ async function triggerManualSync() {
   } catch (err) {
     alert('Sync error: ' + err.message);
   } finally {
-    if (syncBtn) syncBtn.textContent = '🔄 Sync Sources';
+    if (syncBtn) syncBtn.innerHTML = '<span>🔄 Sync Sources</span>';
   }
 }
 
@@ -503,10 +611,27 @@ function initTelegramView() {
 /* SEARCH & FILTERS CONTROLS */
 function initSearchAndFilters() {
   document.getElementById('run-search-btn').addEventListener('click', () => loadJobsFeed(true));
+  document.getElementById('job-search-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') loadJobsFeed(true);
+  });
   document.getElementById('filter-exp').addEventListener('change', () => loadJobsFeed(true));
   document.getElementById('filter-remote').addEventListener('change', () => loadJobsFeed(true));
   document.getElementById('filter-salary').addEventListener('change', () => loadJobsFeed(true));
-  
+
+  // Salary Chips Handler
+  const chips = document.querySelectorAll('.salary-chip');
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+
+      selectedSalaryMin = chip.getAttribute('data-min') || null;
+      selectedSalaryMax = chip.getAttribute('data-max') || null;
+
+      loadJobsFeed(true);
+    });
+  });
+
   document.getElementById('bookmarked-only-btn').addEventListener('click', () => {
     isBookmarkedOnlyFilter = !isBookmarkedOnlyFilter;
     const btn = document.getElementById('bookmarked-only-btn');
@@ -542,7 +667,7 @@ function initModals() {
     const query = document.getElementById('modal-search-query').value.trim();
     const exp = document.getElementById('filter-exp').value;
     const remote = document.getElementById('filter-remote').value;
-    const minSal = document.getElementById('filter-salary').value;
+    const minSal = selectedSalaryMin || document.getElementById('filter-salary').value;
 
     if (!name) return alert('Please provide a name for this search rule.');
 
@@ -574,6 +699,12 @@ function initCommandPalette() {
   const palette = document.getElementById('command-palette');
   const input = document.getElementById('cmd-input');
   const list = document.getElementById('cmd-results');
+  const triggerBtn = document.getElementById('cmd-k-btn');
+
+  triggerBtn?.addEventListener('click', () => {
+    palette.classList.remove('hidden');
+    input.focus();
+  });
 
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {

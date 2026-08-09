@@ -1,5 +1,6 @@
 import time
 import datetime
+import asyncio
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -11,10 +12,10 @@ from backend.app.connectors.linkedin import LinkedInConnector
 from backend.app.connectors.naukri import NaukriConnector
 from backend.app.connectors.config_company import load_configurable_company_connectors
 from backend.app.models.job import ConnectorHealth, ConnectorExecution
+from backend.app.models.search_request import SearchRequest
 
 class ConnectorRegistry:
     def __init__(self):
-        # Step 2: Consolidated single implementations per connector / ingestion pipeline
         self._connectors: List[BaseConnector] = [
             TwoStageJobIngestionPipeline(),
             LinkedInConnector(),
@@ -36,11 +37,39 @@ class ConnectorRegistry:
             for c in self._connectors
         ]
 
+    async def run_user_search(self, request: SearchRequest) -> List[Dict[str, Any]]:
+        """
+        PART 1, 6 & 15 — User-Driven Search Dispatch Engine with 3.5s Fast Timeout
+        Dispatches SearchRequest concurrently across live search connectors.
+        """
+        async def safe_fetch(c: BaseConnector):
+            try:
+                if hasattr(c, "fetch_user_search"):
+                    return await c.fetch_user_search(request)
+                if c.name in ["LinkedIn Jobs", "Naukri Jobs"]:
+                    return await c.fetch()
+                return []
+            except Exception as e:
+                print(f"[ConnectorRegistry] Connector {c.name} search error: {e}")
+                return []
+
+        try:
+            tasks = [safe_fetch(c) for c in self._connectors]
+            results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=3.5)
+            
+            combined = []
+            for r in results:
+                if isinstance(r, list):
+                    combined.extend(r)
+            return combined
+        except asyncio.TimeoutError:
+            print("[ConnectorRegistry] Search dispatch timed out after 3.5s. Returning fast results.")
+            return []
+        except Exception as e:
+            print(f"[ConnectorRegistry] Error running user search: {e}")
+            return []
+
     async def run_single_connector(self, connector: BaseConnector, db: AsyncSession) -> Dict[str, Any]:
-        """
-        Step 11 & 12: Resilient Execution & Comprehensive Health Metrics Pipeline
-        started_at -> fetch -> validate -> measure metrics -> commit logs
-        """
         started_at = datetime.datetime.utcnow()
         t0 = time.time()
         
@@ -69,7 +98,6 @@ class ConnectorRegistry:
         finished_at = datetime.datetime.utcnow()
         duration_ms = round((time.time() - t0) * 1000.0, 2)
 
-        # Log exact execution into ConnectorExecution table
         execution = ConnectorExecution(
             connector_name=connector.name,
             source_type=connector.source_type,
@@ -87,13 +115,11 @@ class ConnectorRegistry:
         db.add(execution)
         await db.commit()
 
-        # Dynamic rolling average runtime calculation
         avg_res = await db.execute(
             select(func.avg(ConnectorExecution.duration_ms)).where(ConnectorExecution.connector_name == connector.name)
         )
         avg_runtime_ms = round(avg_res.scalar() or duration_ms, 2)
 
-        # Update ConnectorHealth dashboard record
         health_res = await db.execute(select(ConnectorHealth).where(ConnectorHealth.name == connector.name))
         health_record = health_res.scalars().first()
 
@@ -134,7 +160,6 @@ class ConnectorRegistry:
                 res = await self.run_single_connector(connector, db)
                 all_jobs.extend(res.get("jobs", []))
             except Exception as e:
-                # Step 11: Failure Isolation — One failing connector must never crash others!
                 print(f"[ConnectorRegistry] Connector {connector.name} error: {e}")
         return all_jobs
 

@@ -12,21 +12,26 @@
 </head>
 <body>
   <div id="app" class="app-layout">
+    <!-- Ambient Aceternity Mesh Background Glow -->
+    <div class="ambient-mesh"></div>
+
     <!-- Top Navigation Header -->
     <header class="top-header">
       <div class="header-brand">
-        <div class="logo-icon">⚡</div>
+        <img src="assets/logo.png" alt="JobPulse Logo" class="brand-logo-img">
         <span class="brand-title">JobPulse</span>
         <span class="badge badge-pulse">LIVE INDEXING</span>
       </div>
 
       <div class="header-actions">
         <button id="cmd-k-btn" class="cmd-k-trigger" title="Press Ctrl+K">
-          <span>🔍 Quick Search...</span>
-          <kbd>Ctrl K</kbd>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Search opportunities...</span>
+          <kbd>⌘K</kbd>
         </button>
         <button id="sync-now-btn" class="btn btn-sm btn-outline">
-          <span class="icon">🔄</span> Sync Sources
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          <span>Sync Sources</span>
         </button>
         <button id="theme-toggle" class="btn btn-sm btn-icon" title="Toggle Light/Dark Theme">
           🌙
@@ -43,31 +48,40 @@
       <aside class="sidebar">
         <nav class="nav-menu">
           <a href="#" class="nav-item active" data-tab="jobs">
-            <span class="icon">💼</span> Discover Jobs
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            <span>Discover Jobs</span>
           </a>
           <a href="#" class="nav-item" data-tab="searches">
-            <span class="icon">💾</span> Saved Searches
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            <span>Search Alerts</span>
+          </a>
+          <a href="#" class="nav-item" data-tab="applications">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>Application Kanban</span>
           </a>
           <a href="#" class="nav-item" data-tab="bookmarks">
-            <span class="icon">⭐</span> Bookmarks & Applications
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            <span>Bookmarks</span>
           </a>
           <a href="#" class="nav-item" data-tab="analytics">
-            <span class="icon">📈</span> Analytics
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            <span>Analytics</span>
           </a>
           <a href="#" class="nav-item" data-tab="connectors">
-            <span class="icon">🔌</span> Source Connectors
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v8"></path><path d="m4.93 10.93 4.24 4.24"></path><path d="m19.07 10.93-4.24 4.24"></path></svg>
+            <span>Source Connectors</span>
           </a>
           <a href="#" class="nav-item" data-tab="telegram">
-            <span class="icon">✈️</span> Telegram Alerts
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <span>Telegram Alerts</span>
           </a>
         </nav>
 
         <div class="sidebar-footer">
           <div class="status-indicator">
             <span class="dot active"></span>
-            <span>Scheduler Running</span>
+            <span>Live Discovery Active</span>
           </div>
-          <small class="version-tag">JobPulse v1.0 (Open Source)</small>
         </div>
       </aside>
 
@@ -80,8 +94,22 @@
           <div class="search-panel">
             <div class="search-input-wrapper">
               <span class="search-icon">🔍</span>
-              <input type="text" id="job-search-input" placeholder="Search title, keywords (e.g. Backend AND Python NOT Senior)...">
-              <button id="run-search-btn" class="btn btn-primary">Search</button>
+              <input type="text" id="job-search-input" placeholder="Search title, keywords (e.g. Machine Learning, Full Stack, SDE 1)...">
+              <button id="run-search-btn" class="btn btn-primary">
+                Search Opportunities
+              </button>
+            </div>
+
+            <!-- Sleek Pill Button Salary Chips -->
+            <div class="salary-chips-row">
+              <span class="chip-label">Salary Range:</span>
+              <button class="salary-chip active" data-min="" data-max="">All</button>
+              <button class="salary-chip" data-min="4.5" data-max="8">4.5–8 LPA</button>
+              <button class="salary-chip" data-min="8" data-max="10">8–10 LPA</button>
+              <button class="salary-chip" data-min="10" data-max="12">10–12 LPA</button>
+              <button class="salary-chip" data-min="12" data-max="18">12–18 LPA</button>
+              <button class="salary-chip" data-min="18" data-max="25">18–25 LPA</button>
+              <button class="salary-chip" data-min="25" data-max="">25+ LPA</button>
             </div>
 
             <div class="filter-bar">
@@ -98,11 +126,6 @@
                   <option value="Lead">👑 Lead / Tech Lead</option>
                   <option value="Staff">⚡ Staff Engineer</option>
                   <option value="Principal">🏛️ Principal Engineer</option>
-                  <option value="Manager">📊 Engineering Manager</option>
-                  <option value="Director">🎯 Director</option>
-                  <option value="Vice President">🌐 Vice President</option>
-                  <option value="Distinguished Engineer">🌟 Distinguished Engineer</option>
-                  <option value="Fellow">🎖️ Fellow</option>
                 </select>
               </div>
 
@@ -141,14 +164,14 @@
             </div>
             <div class="feed-controls">
               <button id="save-current-search-btn" class="btn btn-sm btn-outline">
-                ➕ Save Search Alert
+                ⚡ Save Search Alert
               </button>
             </div>
           </div>
 
           <!-- Jobs Cards Container -->
           <div id="jobs-container" class="jobs-grid">
-            <div class="loading-skeleton">Loading discovery feed...</div>
+            <div class="loading-skeleton">Loading live discovery feed...</div>
           </div>
 
           <div id="load-more-wrapper" style="text-align: center; margin: 25px 0;">
@@ -172,11 +195,36 @@
           </div>
         </section>
 
-        <!-- TAB 3: BOOKMARKS & APPLICATIONS -->
+        <!-- TAB 3: APPLICATION WORKSPACE (KANBAN) -->
+        <section id="tab-applications" class="tab-pane">
+          <div class="section-header">
+            <div>
+              <h2>Application Workspace</h2>
+              <p class="text-muted">Track active applications across Kanban columns, log timeline events, and manage recruiter follow-ups.</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button id="export-applications-btn" class="btn btn-sm btn-outline">📥 Export CSV</button>
+
+              <label for="csv-file-input" class="btn btn-sm btn-outline" style="cursor: pointer; margin: 0;">
+                📤 Import CSV
+              </label>
+              <input type="file" id="csv-file-input" accept=".csv" class="hidden" />
+
+              <button id="add-custom-application-btn" class="btn btn-sm btn-primary">➕ Track Application</button>
+            </div>
+          </div>
+
+          <!-- KANBAN BOARD GRID -->
+          <div id="kanban-board-container" class="kanban-board">
+            <div class="loading-skeleton">Loading Application Kanban...</div>
+          </div>
+        </section>
+
+        <!-- TAB 4: BOOKMARKS -->
         <section id="tab-bookmarks" class="tab-pane">
           <div class="section-header">
-            <h2>Bookmarked Opportunities & Application Tracker</h2>
-            <p class="text-muted">Manage interest folders and active employer applications.</p>
+            <h2>Bookmarked Opportunities</h2>
+            <p class="text-muted">Saved opportunities for quick access and application tracking.</p>
           </div>
 
           <div id="bookmarks-container" class="jobs-grid">
@@ -184,98 +232,84 @@
           </div>
         </section>
 
-        <!-- TAB 4: ANALYTICS -->
+        <!-- TAB 5: ANALYTICS (ACETERNITY BENTO GRID) -->
         <section id="tab-analytics" class="tab-pane">
           <div class="section-header">
-            <h2>Live Hiring Trends & Platform Analytics</h2>
-            <p class="text-muted">Real-time telemetry across 300+ tracked companies, ATS boards, and experience breakdown.</p>
+            <h2>Live Hiring Telemetry & Analytics</h2>
+            <p class="text-muted">Real-time stats across tracked company career portals, ATS boards, and hiring conversion.</p>
           </div>
 
-          <div class="stats-grid" id="analytics-stats">
-            <div class="stat-card">
-              <span class="stat-label">Freshers Jobs Today</span>
-              <span class="stat-value" id="stat-freshers-today">0</span>
+          <!-- Aceternity Bento Grid Container -->
+          <div class="bento-grid" id="analytics-bento-grid">
+            <div class="bento-card bento-hero">
+              <div class="bento-glow"></div>
+              <span class="stat-label">Total Discovered Jobs</span>
+              <span class="stat-value" id="stat-total-jobs">0</span>
+              <small class="text-muted">Live active positions indexed in database</small>
             </div>
-            <div class="stat-card">
-              <span class="stat-label">Internships Today</span>
-              <span class="stat-value" id="stat-internships-today">0</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Mid-Level Jobs Today</span>
-              <span class="stat-value" id="stat-mid-today">0</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Senior Jobs Today</span>
-              <span class="stat-value" id="stat-senior-today">0</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Jobs Verified Today</span>
-              <span class="stat-value" id="stat-verified-today">0</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Companies Hiring Freshers</span>
-              <span class="stat-value" id="stat-comp-freshers">0</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Verification Rate</span>
-              <span class="stat-value" id="stat-verification-rate">100%</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Companies Tracked</span>
-              <span class="stat-value" id="stat-companies">300+</span>
-            </div>
-          </div>
 
-          <div class="analytics-card mt-6">
-            <h3>Top Hiring Tech Companies</h3>
-            <ul id="top-companies-list" class="top-list">
-              <li>Loading top hiring companies...</li>
-            </ul>
+            <div class="bento-card">
+              <div class="bento-glow"></div>
+              <span class="stat-label">Applications Tracked</span>
+              <span class="stat-value" id="stat-remote-jobs">0</span>
+              <small class="text-muted">Active in Kanban workspace</small>
+            </div>
+
+            <div class="bento-card">
+              <div class="bento-glow"></div>
+              <span class="stat-label">Active Interviews</span>
+              <span class="stat-value" id="stat-fresher-jobs">0</span>
+              <small class="text-muted">OA / Technical / HR Rounds</small>
+            </div>
+
+            <div class="bento-card">
+              <div class="bento-glow"></div>
+              <span class="stat-label">Response Rate %</span>
+              <span class="stat-value" id="stat-avg-salary">0%</span>
+              <small class="text-muted">Interview & Offer conversion</small>
+            </div>
           </div>
         </section>
 
-        <!-- TAB 5: SOURCE CONNECTORS -->
+        <!-- TAB 6: SOURCE CONNECTORS -->
         <section id="tab-connectors" class="tab-pane">
           <div class="section-header">
             <div>
               <h2>Source Connectors & Health Diagnostics</h2>
-              <p class="text-muted">300+ company registry and plugin connectors indexing public job pages and ATS platforms.</p>
+              <p class="text-muted">Real-time status of multi-source career crawlers (Greenhouse, Lever, LinkedIn, Workday).</p>
             </div>
-            <button id="trigger-sync-panel-btn" class="btn btn-primary">🔄 Run All Connectors Now</button>
+            <button id="trigger-sync-panel-btn" class="btn btn-primary">🔄 Sync All Connectors</button>
           </div>
 
           <div id="connectors-container" class="table-card-wrapper">
-            <div class="loading-skeleton">Loading connector status...</div>
+            <div class="loading-skeleton">Loading connector diagnostics...</div>
           </div>
         </section>
 
-        <!-- TAB 6: TELEGRAM ALERTS -->
+        <!-- TAB 7: TELEGRAM ALERTS -->
         <section id="tab-telegram" class="tab-pane">
           <div class="section-header">
-            <h2>Telegram Instant Alert Configurator</h2>
-            <p class="text-muted">Link your Telegram account to receive alerts within minutes of new job postings.</p>
+            <div>
+              <h2>Telegram Bot Integration</h2>
+              <p class="text-muted">Link your Telegram account to receive instant push alerts when matching jobs are indexed.</p>
+            </div>
           </div>
 
-          <div class="card card-padded max-w-xl">
-            <h3>Connect Telegram Bot & Account Linking</h3>
-            <p class="text-muted mb-4">Generate a secure token to link your Telegram account (`/start TOKEN`) or test dispatch with your Chat ID.</p>
+          <div class="card card-padded max-w-lg">
+            <h3>Link Telegram Account</h3>
+            <p class="text-muted text-sm">Generate a 1-time verification token, then message our Telegram bot with <code>/link &lt;TOKEN&gt;</code>.</p>
+            <button id="generate-tg-token-btn" class="btn btn-primary mt-4">Generate 1-Time Token</button>
+            <div id="telegram-token-display" class="hidden mt-4"></div>
 
-            <div class="button-row mb-4">
-              <button id="generate-tg-token-btn" class="btn btn-outline">🔑 Generate Linking Token</button>
-            </div>
+            <hr style="border-color: var(--border-color); margin: 20px 0;">
 
-            <div id="telegram-token-display" class="hidden mb-4"></div>
-
-            <div class="form-group">
+            <h3>Test Alert Dispatch</h3>
+            <div class="form-group mt-2">
               <label>Telegram Chat ID:</label>
-              <input type="text" id="telegram-chat-id-input" value="STUDENT_TELEGRAM_DEMO" class="input-field">
+              <input type="text" id="telegram-chat-id-input" class="input-field" placeholder="e.g. 123456789">
             </div>
-
-            <div class="button-row">
-              <button id="send-telegram-test-btn" class="btn btn-primary">⚡ Send Test Alert</button>
-            </div>
-
-            <div id="telegram-test-result" class="alert mt-4 hidden"></div>
+            <button id="send-telegram-test-btn" class="btn btn-outline">⚡ Send Test Alert</button>
+            <div id="telegram-test-result" class="hidden alert mt-3"></div>
           </div>
         </section>
 
@@ -283,46 +317,33 @@
     </div>
   </div>
 
-  <!-- COMMAND PALETTE MODAL (Ctrl + K) -->
-  <div id="cmd-k-modal" class="modal-overlay hidden">
-    <div class="cmd-k-box">
+  <!-- Command Palette Modal -->
+  <div id="command-palette" class="modal-overlay hidden">
+    <div class="cmd-k-box card">
       <div class="cmd-k-header">
-        <input type="text" id="cmd-k-input" placeholder="Type a command or job keyword..." autofocus>
-        <kbd>ESC</kbd>
+        <input type="text" id="cmd-input" placeholder="Type a job title, technology, or company (e.g. Python, Vercel)...">
       </div>
-      <div class="cmd-k-results" id="cmd-k-results">
-        <div class="cmd-k-item" data-action="search-sde">🔍 Search 'Software Engineer' roles</div>
-        <div class="cmd-k-item" data-action="search-ai">🤖 Search 'AI / ML Engineer' roles</div>
-        <div class="cmd-k-item" data-action="search-remote">🌐 Filter 'Remote' roles</div>
-        <div class="cmd-k-item" data-action="open-searches">💾 Open Saved Searches</div>
-        <div class="cmd-k-item" data-action="sync-now">🔄 Trigger Source Sync</div>
-      </div>
+      <ul id="cmd-results" class="cmd-k-results">
+        <li class="cmd-item text-muted">Type a tech keyword (e.g. FastAPI, Python, React, Remote)...</li>
+      </ul>
     </div>
   </div>
 
-  <!-- CREATE SAVED SEARCH MODAL -->
+  <!-- Save Search Rule Modal -->
   <div id="save-search-modal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Create Saved Search Alert</h3>
-        <button id="close-modal-btn" class="btn-close">✕</button>
+        <h3>Create Automated Search Alert</h3>
+        <button id="close-modal-btn" class="btn btn-ghost btn-sm">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>Alert Name:</label>
-          <input type="text" id="modal-search-name" placeholder="e.g. SDE 1 Bengaluru Hybrid" class="input-field">
+          <label>Alert Rule Name:</label>
+          <input type="text" id="modal-search-name" class="input-field" placeholder="e.g. SDE 1 Backend Jobs">
         </div>
         <div class="form-group">
-          <label>Keywords / Query:</label>
-          <input type="text" id="modal-search-query" placeholder="e.g. Software Engineer AND Backend" class="input-field">
-        </div>
-        <div class="form-group">
-          <label>Location:</label>
-          <input type="text" id="modal-search-location" placeholder="e.g. Bengaluru" class="input-field">
-        </div>
-        <div class="form-group">
-          <label>Min Salary (LPA):</label>
-          <input type="number" id="modal-search-salary" placeholder="10" class="input-field">
+          <label>Query Keywords:</label>
+          <input type="text" id="modal-search-query" class="input-field" placeholder="e.g. Backend AND Python">
         </div>
       </div>
       <div class="modal-footer">
