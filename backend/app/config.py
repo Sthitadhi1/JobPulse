@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     SESSION_SECRET: str = os.getenv("SESSION_SECRET", "jobpulse-session-secret-change-in-production!")
     SCHEDULER_SECRET: str = os.getenv("SCHEDULER_SECRET", "jobpulse-internal-scheduler-secret")
     CONNECTOR_MAX_CONCURRENCY: int = int(os.getenv("CONNECTOR_MAX_CONCURRENCY", "5"))
-    DISCOVERY_INTERVAL_SECONDS: int = int(os.getenv("DISCOVERY_INTERVAL_SECONDS", "3600"))
+    DISCOVERY_INTERVAL_SECONDS: int = int(os.getenv("DISCOVERY_INTERVAL_SECONDS", "60" if os.getenv("ENVIRONMENT", "development") == "development" else "3600"))
+    DISCOVERY_LOCK_TIMEOUT_SECONDS: int = int(os.getenv("DISCOVERY_LOCK_TIMEOUT_SECONDS", "900" if os.getenv("ENVIRONMENT", "development") == "development" else "3600"))
+    JOB_MISSING_CYCLES_THRESHOLD: int = int(os.getenv("JOB_MISSING_CYCLES_THRESHOLD", "2" if os.getenv("ENVIRONMENT", "development") == "development" else "3"))
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000")
 
 

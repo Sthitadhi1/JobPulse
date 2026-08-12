@@ -1,13 +1,28 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import text
+from sqlalchemy import text, event
 from backend.app.config import settings
+
+engine_kwargs = {
+    "echo": False,
+    "future": True
+}
+if "sqlite" in settings.DATABASE_URL:
+    engine_kwargs["connect_args"] = {"timeout": 30.0}
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
-    future=True
+    **engine_kwargs
 )
+
+if "sqlite" in settings.DATABASE_URL:
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

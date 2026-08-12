@@ -54,6 +54,16 @@ async def user_search_jobs(
         valid_jobs = [j for j in normalized if SchedulerEngine.validate_job_data(j)]
         deduped_jobs = DeduplicatorEngine.deduplicate_in_memory(valid_jobs)
 
+        # Cross-reference live connector search results against database to exclude REMOVED listings
+        if deduped_jobs:
+            fps = [j.get("hash_signature") or DeduplicatorEngine.generate_fingerprint(j) for j in deduped_jobs]
+            res_db_status = await db.execute(select(Job.hash_signature, Job.status).where(Job.hash_signature.in_(fps)))
+            non_active_fps = {row[0] for row in res_db_status.all() if row[1] != "ACTIVE"}
+            deduped_jobs = [
+                j for j in deduped_jobs
+                if (j.get("hash_signature") or DeduplicatorEngine.generate_fingerprint(j)) not in non_active_fps
+            ]
+
     if deduped_jobs:
         return {
             "success": True,
@@ -88,7 +98,7 @@ async def user_search_jobs(
     total_db_records = total_db_res.scalar() or 0
 
     offset = (page - 1) * limit
-    stmt = stmt.order_by(desc(Job.posted_at), desc(Job.id)).offset(offset).limit(limit)
+    stmt = stmt.order_by(desc(Job.last_seen), desc(Job.id)).offset(offset).limit(limit)
     db_res = await db.execute(stmt)
     db_jobs = db_res.scalars().all()
 
@@ -163,10 +173,10 @@ async def list_jobs(
 
     stmt = select(Job)
 
-    if status:
-        stmt = stmt.where(Job.status.ilike(f"%{status}%"))
+    if status and status.strip() and status.strip().upper() != "ALL":
+        stmt = stmt.where(Job.status.ilike(f"%{status.strip()}%"))
     else:
-        stmt = stmt.where(Job.status != "REMOVED")
+        stmt = stmt.where(Job.status == "ACTIVE")
 
     if q:
         boolean_cond = SearchEngine.build_boolean_conditions(q)
@@ -213,7 +223,7 @@ async def list_jobs(
     total_records = total_res.scalar() or 0
 
     offset = (page - 1) * limit
-    stmt = stmt.order_by(desc(Job.posted_at), desc(Job.id)).offset(offset).limit(limit)
+    stmt = stmt.order_by(desc(Job.last_seen), desc(Job.id)).offset(offset).limit(limit)
 
     res = await db.execute(stmt)
     jobs = res.scalars().all()
@@ -242,6 +252,7 @@ async def list_jobs(
             "tags": j.raw_tags.split(", ") if j.raw_tags else [],
             "raw_tags": j.raw_tags,
             "description": j.description,
+            "hash_signature": j.hash_signature,
             "is_bookmarked": j.is_bookmarked,
             "status": j.status,
             "verification_status": j.verification_status,
@@ -262,6 +273,53 @@ async def list_jobs(
             "total_pages": max(1, (total_records + limit - 1) // limit)
         },
         "data": formatted_jobs
+    }
+
+@router.get("/{job_id}")
+async def get_job_detail(
+    job_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    res = await db.execute(select(Job).where(Job.id == job_id))
+    j = res.scalars().first()
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    is_active = (j.status == "ACTIVE")
+    return {
+        "success": True,
+        "data": {
+            "id": j.id,
+            "external_job_id": j.external_job_id,
+            "title": j.title,
+            "company": j.company,
+            "department": j.department,
+            "location": j.location,
+            "country": j.country,
+            "remote_type": j.remote_type,
+            "employment_type": j.employment_type,
+            "experience_level": j.experience_level,
+            "salary_range": j.salary_range,
+            "min_salary_lpa": j.min_salary_lpa,
+            "max_salary_lpa": j.max_salary_lpa,
+            "job_url": j.job_url,
+            "source_url": j.source_url,
+            "external_apply_url": j.external_apply_url,
+            "source": j.source,
+            "source_type": j.source_type,
+            "tags": j.raw_tags.split(", ") if j.raw_tags else [],
+            "raw_tags": j.raw_tags,
+            "description": j.description,
+            "is_bookmarked": j.is_bookmarked,
+            "status": j.status,
+            "verification_status": j.verification_status,
+            "is_active_opportunity": is_active,
+            "notice": None if is_active else "This job is no longer active.",
+            "first_seen": j.first_seen.isoformat() if j.first_seen else None,
+            "last_seen": j.last_seen.isoformat() if j.last_seen else None,
+            "last_verified": j.last_verified.isoformat() if j.last_verified else None,
+            "posted_at": j.posted_at.isoformat() if j.posted_at else None
+        }
     }
 
 @router.post("/{job_id}/bookmark")

@@ -782,7 +782,7 @@ const AuthState = {
     const profileResendBtn = document.getElementById('profile-resend-verif-btn');
 
     if (this.user) {
-      if (unauthGroup) unauthGroup.style.display = 'none';
+      if (unauthGroup) unauthGroup.classList.add('hidden');
       if (authGroup) authGroup.classList.remove('hidden');
       if (nameDisplay) nameDisplay.textContent = this.user.name || this.user.email;
 
@@ -803,7 +803,7 @@ const AuthState = {
         }
       }
     } else {
-      if (unauthGroup) unauthGroup.style.display = 'flex';
+      if (unauthGroup) unauthGroup.classList.remove('hidden');
       if (authGroup) authGroup.classList.add('hidden');
 
       if (profileUnauth) profileUnauth.classList.remove('hidden');
@@ -811,6 +811,24 @@ const AuthState = {
     }
   }
 };
+
+function checkRouteHash() {
+  const hash = window.location.hash;
+  const loginModal = document.getElementById('login-modal');
+  const signupModal = document.getElementById('signup-modal');
+  const otpModal = document.getElementById('otp-modal');
+  const forgotModal = document.getElementById('forgot-password-modal');
+
+  if (hash === '#login') {
+    loginModal?.classList.remove('hidden');
+  } else if (hash === '#signup') {
+    signupModal?.classList.remove('hidden');
+  } else if (hash === '#forgot-password') {
+    forgotModal?.classList.remove('hidden');
+  } else if (hash === '#verify-otp') {
+    otpModal?.classList.remove('hidden');
+  }
+}
 
 function setupAuthHandlers() {
   const loginModal = document.getElementById('login-modal');
@@ -1015,5 +1033,7 @@ function setupAuthHandlers() {
 document.addEventListener('DOMContentLoaded', () => {
   AuthState.check();
   setupAuthHandlers();
+  checkRouteHash();
+  window.addEventListener('hashchange', checkRouteHash);
 });
 

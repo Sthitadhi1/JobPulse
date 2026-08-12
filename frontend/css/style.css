@@ -2,6 +2,10 @@
    JobPulse — Modern Shadcn UI + Aceternity UI Design System
    ========================================================================== */
 
+.hidden {
+  display: none !important;
+}
+
 :root {
   /* Shadcn UI Dark Palette */
   --bg-root: #070a11;

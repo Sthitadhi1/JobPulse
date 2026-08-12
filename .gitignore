@@ -1,21 +1,25 @@
 # Environment variables and secrets
 .env
 *.env
+!.env.example
 backend/app/.env
-.env.example
 
 # Databases
 *.db
 jobpulse.db
 
-# Python bytecode and virtual environments
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
+
+# Python virtual environments
 env/
 venv/
 .venv/
+
+# Compiled Python extensions
+*.so
 
 # Antigravity & IDE files
 .gemini/

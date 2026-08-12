@@ -3,6 +3,8 @@ import uuid
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey, Index
 from backend.app.database import Base
 
+ACTIVE_JOB_STATUSES = ["ACTIVE"]
+
 class User(Base):
     __tablename__ = "users"
 
@@ -86,6 +88,10 @@ class Job(Base):
     posted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True) # Step 18 Index
     discovered_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+    @property
+    def is_active_opportunity(self) -> bool:
+        return self.status == "ACTIVE"
 
 # Compound Index for high-performance filter queries
 Index('idx_jobs_company_exp_status', Job.company, Job.experience_level, Job.status)

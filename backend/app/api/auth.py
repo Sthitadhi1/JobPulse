@@ -131,7 +131,6 @@ async def signup(req: SignupRequest, response: Response, db: AsyncSession = Depe
     return {
         "success": True,
         "message": "User account created successfully. Verification email dispatched.",
-        "session_token": session_token,
         "user": {
             "id": user.id,
             "name": user.name,
@@ -174,7 +173,6 @@ async def login(req: LoginRequest, response: Response, db: AsyncSession = Depend
     return {
         "success": True,
         "message": "Login successful.",
-        "session_token": session_token,
         "user": {
             "id": user.id,
             "name": user.name,
@@ -203,9 +201,13 @@ async def logout(
     return {"success": True, "message": "Logged out successfully."}
 
 
+from fastapi.responses import HTMLResponse
+
 @router.get("/verify-email")
-async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+async def verify_email(token: str, request: Request, db: AsyncSession = Depends(get_db)):
     if not token:
+        if "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse("<h2>Missing verification token.</h2><p><a href='/dashboard'>Return to JobPulse</a></p>")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing verification token.")
 
     token_hash = AuthService.hash_token(token)
@@ -219,9 +221,13 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     )
     verif_record = res.scalars().first()
     if not verif_record:
+        if "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse("<h2>Invalid or already used verification token.</h2><p><a href='/dashboard'>Return to JobPulse</a></p>")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or already used verification token.")
 
     if verif_record.expires_at < now:
+        if "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse("<h2>Verification token has expired.</h2><p><a href='/dashboard'>Return to JobPulse</a></p>")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification token has expired.")
 
     verif_record.used_at = now
@@ -232,6 +238,21 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
         user.email_verified = True
 
     await db.commit()
+
+    if "text/html" in request.headers.get("accept", ""):
+        return HTMLResponse("""
+            <!DOCTYPE html>
+            <html>
+            <head><title>JobPulse — Email Verified</title><style>body { font-family: sans-serif; background: #070a11; color: #f8fafc; text-align: center; padding: 60px 20px; } .card { max-width: 450px; margin: 0 auto; background: #0f172a; padding: 40px; border-radius: 12px; border: 1px solid #1e293b; } .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 20px; }</style></head>
+            <body>
+                <div class="card">
+                    <h1>Email verified successfully.</h1>
+                    <p>Your JobPulse account email has been verified.</p>
+                    <a href="/dashboard" class="btn">Continue to JobPulse</a>
+                </div>
+            </body>
+            </html>
+        """)
 
     return {"success": True, "message": "Email address verified successfully."}
 
@@ -347,7 +368,6 @@ async def verify_otp(req: VerifyOtpRequest, response: Response, db: AsyncSession
         return {
             "success": True,
             "message": "OTP verified successfully.",
-            "session_token": session_token,
             "user": {
                 "id": user.id,
                 "name": user.name,
