@@ -1,15 +1,43 @@
-from fastapi import APIRouter, Depends, Query
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 
+from backend.app.config import settings
 from backend.app.database import get_db
 from backend.app.models.job import ConnectorHealth, ConnectorExecution, Job, CompanyRegistry
 from backend.app.engine.scheduler import scheduler_engine
-
 from backend.app.engine.verification import VerificationEngine
 
 router = APIRouter(prefix="/admin/connectors", tags=["Admin Connectors"])
+
+@router.post("/run")
+async def run_scheduler_discovery(
+    x_scheduler_secret: Optional[str] = Header(None, alias="X-Scheduler-Secret"),
+    scheduler_secret: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Protected Endpoint for External Scheduler / Cron:
+    Triggers complete job discovery cycle. Requires internal SCHEDULER_SECRET.
+    """
+    provided_secret = x_scheduler_secret or scheduler_secret
+    expected_secret = getattr(settings, "SCHEDULER_SECRET", None)
+
+    if not provided_secret or provided_secret != expected_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized. Invalid or missing scheduler secret."
+        )
+
+    result = await scheduler_engine.run_discovery_cycle(db)
+    return {
+        "success": True,
+        "message": "Scheduler discovery cycle completed.",
+        "data": result
+    }
+
 
 @router.post("/dead-links/verify")
 async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db)):
@@ -76,6 +104,7 @@ async def get_connector_history(
         "data": [
             {
                 "id": e.id,
+                "execution_id": e.execution_id,
                 "connector_name": e.connector_name,
                 "source_type": e.source_type,
                 "started_at": e.started_at.isoformat() if e.started_at else None,
@@ -92,6 +121,7 @@ async def get_connector_history(
             for e in execs
         ]
     }
+
 
 @router.get("/companies")
 async def list_registered_companies(db: AsyncSession = Depends(get_db)):

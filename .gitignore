@@ -2,6 +2,7 @@
 .env
 *.env
 backend/app/.env
+.env.example
 
 # Databases
 *.db

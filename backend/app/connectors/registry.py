@@ -14,6 +14,9 @@ from backend.app.connectors.config_company import load_configurable_company_conn
 from backend.app.models.job import ConnectorHealth, ConnectorExecution
 from backend.app.models.search_request import SearchRequest
 
+from backend.app.config import settings
+from backend.app.database import AsyncSessionLocal
+
 class ConnectorRegistry:
     def __init__(self):
         self._connectors: List[BaseConnector] = [
@@ -69,9 +72,15 @@ class ConnectorRegistry:
             print(f"[ConnectorRegistry] Error running user search: {e}")
             return []
 
-    async def run_single_connector(self, connector: BaseConnector, db: AsyncSession) -> Dict[str, Any]:
+    async def run_single_connector(
+        self,
+        connector: BaseConnector,
+        db: AsyncSession,
+        execution_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         started_at = datetime.datetime.utcnow()
         t0 = time.time()
+        print(f"[CONNECTOR] START name={connector.name} execution_id={execution_id or 'N/A'}")
         
         jobs_discovered = 0
         jobs_inserted = 0
@@ -92,13 +101,20 @@ class ConnectorRegistry:
             status = "FAILED"
             errors_count += 1
             error_msg = str(e)
+            print(f"[CONNECTOR] FAILED name={connector.name} error={error_msg}")
         finally:
-            await connector.shutdown()
+            try:
+                await connector.shutdown()
+            except Exception as se:
+                print(f"[CONNECTOR] SHUTDOWN ERROR name={connector.name}: {se}")
 
         finished_at = datetime.datetime.utcnow()
         duration_ms = round((time.time() - t0) * 1000.0, 2)
+        if status == "SUCCESS":
+            print(f"[CONNECTOR] COMPLETE name={connector.name} jobs={len(valid_jobs)} duration_ms={duration_ms}")
 
         execution = ConnectorExecution(
+            execution_id=execution_id,
             connector_name=connector.name,
             source_type=connector.source_type,
             started_at=started_at,
@@ -153,14 +169,35 @@ class ConnectorRegistry:
             "error": error_msg
         }
 
-    async def run_all_connectors(self, db: AsyncSession) -> List[Dict[str, Any]]:
+    async def run_all_connectors(
+        self,
+        db: Optional[AsyncSession] = None,
+        execution_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Executes registered connectors concurrently using asyncio.gather and an asyncio.Semaphore
+        to limit maximum concurrency (configured via CONNECTOR_MAX_CONCURRENCY).
+        Each connector task uses its own independent AsyncSession to ensure SQLAlchemy thread safety.
+        """
+        concurrency = getattr(settings, "CONNECTOR_MAX_CONCURRENCY", 5)
+        sem = asyncio.Semaphore(concurrency)
+
+        async def worker(connector: BaseConnector) -> Dict[str, Any]:
+            async with sem:
+                async with AsyncSessionLocal() as task_db:
+                    return await self.run_single_connector(connector, task_db, execution_id=execution_id)
+
+        tasks = [worker(c) for c in self._connectors]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         all_jobs = []
-        for connector in self._connectors:
-            try:
-                res = await self.run_single_connector(connector, db)
-                all_jobs.extend(res.get("jobs", []))
-            except Exception as e:
-                print(f"[ConnectorRegistry] Connector {connector.name} error: {e}")
+        for r in results:
+            if isinstance(r, dict) and r.get("status") == "SUCCESS":
+                all_jobs.extend(r.get("jobs", []))
+            elif isinstance(r, Exception):
+                print(f"[ConnectorRegistry] Worker exception: {r}")
+
         return all_jobs
 
 connector_registry = ConnectorRegistry()
+

@@ -750,3 +750,270 @@ function selectCmdJob(jobId) {
     if (applyTarget && applyTarget !== '#') window.open(applyTarget, '_blank');
   }
 }
+
+// Centralized Auth State Manager & UI Controller
+const AuthState = {
+  user: null,
+  async check() {
+    try {
+      const res = await fetch('/api/v1/auth/me');
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        this.user = data.user;
+      } else {
+        this.user = null;
+      }
+    } catch (e) {
+      console.warn("Auth check error:", e);
+      this.user = null;
+    }
+    this.render();
+  },
+  render() {
+    const unauthGroup = document.getElementById('auth-unauthenticated-controls');
+    const authGroup = document.getElementById('auth-authenticated-controls');
+    const nameDisplay = document.getElementById('user-display-name');
+
+    const profileUnauth = document.getElementById('profile-unauth-view');
+    const profileAuth = document.getElementById('profile-auth-view');
+    const profileName = document.getElementById('profile-name-field');
+    const profileEmail = document.getElementById('profile-email-field');
+    const profileVerifBadge = document.getElementById('profile-verif-badge');
+    const profileResendBtn = document.getElementById('profile-resend-verif-btn');
+
+    if (this.user) {
+      if (unauthGroup) unauthGroup.style.display = 'none';
+      if (authGroup) authGroup.classList.remove('hidden');
+      if (nameDisplay) nameDisplay.textContent = this.user.name || this.user.email;
+
+      if (profileUnauth) profileUnauth.classList.add('hidden');
+      if (profileAuth) profileAuth.classList.remove('hidden');
+      if (profileName) profileName.value = this.user.name || '';
+      if (profileEmail) profileEmail.value = this.user.email || '';
+      
+      if (profileVerifBadge) {
+        if (this.user.email_verified) {
+          profileVerifBadge.textContent = 'Verified ✓';
+          profileVerifBadge.className = 'badge badge-success';
+          if (profileResendBtn) profileResendBtn.classList.add('hidden');
+        } else {
+          profileVerifBadge.textContent = 'Unverified';
+          profileVerifBadge.className = 'badge badge-warning';
+          if (profileResendBtn) profileResendBtn.classList.remove('hidden');
+        }
+      }
+    } else {
+      if (unauthGroup) unauthGroup.style.display = 'flex';
+      if (authGroup) authGroup.classList.add('hidden');
+
+      if (profileUnauth) profileUnauth.classList.remove('hidden');
+      if (profileAuth) profileAuth.classList.add('hidden');
+    }
+  }
+};
+
+function setupAuthHandlers() {
+  const loginModal = document.getElementById('login-modal');
+  const signupModal = document.getElementById('signup-modal');
+  const otpModal = document.getElementById('otp-modal');
+  const forgotModal = document.getElementById('forgot-password-modal');
+
+  // Open modals
+  document.getElementById('open-login-btn')?.addEventListener('click', () => loginModal?.classList.remove('hidden'));
+  document.getElementById('profile-open-login-btn')?.addEventListener('click', () => loginModal?.classList.remove('hidden'));
+  document.getElementById('open-signup-btn')?.addEventListener('click', () => signupModal?.classList.remove('hidden'));
+  document.getElementById('profile-open-signup-btn')?.addEventListener('click', () => signupModal?.classList.remove('hidden'));
+  document.getElementById('open-forgot-modal')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    loginModal?.classList.add('hidden');
+    forgotModal?.classList.remove('hidden');
+  });
+
+  // Close modals
+  document.getElementById('close-login-modal')?.addEventListener('click', () => loginModal?.classList.add('hidden'));
+  document.getElementById('cancel-login')?.addEventListener('click', () => loginModal?.classList.add('hidden'));
+  document.getElementById('close-signup-modal')?.addEventListener('click', () => signupModal?.classList.add('hidden'));
+  document.getElementById('cancel-signup')?.addEventListener('click', () => signupModal?.classList.add('hidden'));
+  document.getElementById('close-otp-modal')?.addEventListener('click', () => otpModal?.classList.add('hidden'));
+  document.getElementById('cancel-otp')?.addEventListener('click', () => otpModal?.classList.add('hidden'));
+  document.getElementById('close-forgot-modal')?.addEventListener('click', () => forgotModal?.classList.add('hidden'));
+  document.getElementById('cancel-forgot')?.addEventListener('click', () => forgotModal?.classList.add('hidden'));
+
+  // Submit Login
+  document.getElementById('submit-login-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errorDiv = document.getElementById('login-error-msg');
+
+    errorDiv.classList.add('hidden');
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        loginModal.classList.add('hidden');
+        await AuthState.check();
+      } else {
+        errorDiv.textContent = data.detail || 'Login failed.';
+        errorDiv.classList.remove('hidden');
+      }
+    } catch (err) {
+      errorDiv.textContent = 'Network error during login.';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+
+  // Submit Signup
+  document.getElementById('submit-signup-btn')?.addEventListener('click', async () => {
+    const name = document.getElementById('signup-name').value;
+    const email = document.getElementById('signup-email').value;
+    const password = document.getElementById('signup-password').value;
+    const confirm = document.getElementById('signup-confirm-password').value;
+    const errorDiv = document.getElementById('signup-error-msg');
+
+    errorDiv.classList.add('hidden');
+    if (password !== confirm) {
+      errorDiv.textContent = 'Passwords do not match.';
+      errorDiv.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/v1/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        signupModal.classList.add('hidden');
+        await AuthState.check();
+      } else {
+        errorDiv.textContent = data.detail || 'Signup failed.';
+        errorDiv.classList.remove('hidden');
+      }
+    } catch (err) {
+      errorDiv.textContent = 'Network error during signup.';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+
+  // Logout Handlers
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST' });
+      await AuthState.check();
+    } catch (e) {
+      console.error("Logout failed:", e);
+    }
+  };
+  document.getElementById('header-logout-btn')?.addEventListener('click', handleLogout);
+  document.getElementById('profile-logout-btn')?.addEventListener('click', handleLogout);
+
+  // Request OTP
+  document.getElementById('profile-request-otp-btn')?.addEventListener('click', async () => {
+    if (!AuthState.user) return;
+    try {
+      await fetch('/api/v1/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: AuthState.user.email })
+      });
+      otpModal?.classList.remove('hidden');
+    } catch (e) {
+      alert("Failed to request OTP.");
+    }
+  });
+
+  // Verify OTP
+  document.getElementById('submit-otp-btn')?.addEventListener('click', async () => {
+    const otp = document.getElementById('otp-code-input').value;
+    const errorDiv = document.getElementById('otp-error-msg');
+    errorDiv.classList.add('hidden');
+
+    try {
+      const res = await fetch('/api/v1/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: AuthState.user.email, otp })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        otpModal.classList.add('hidden');
+        await AuthState.check();
+        alert("OTP verified successfully!");
+      } else {
+        errorDiv.textContent = data.detail || "Invalid OTP.";
+        errorDiv.classList.remove('hidden');
+      }
+    } catch (e) {
+      errorDiv.textContent = "Error verifying OTP.";
+      errorDiv.classList.remove('hidden');
+    }
+  });
+
+  // Submit Forgot Password
+  document.getElementById('submit-forgot-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('forgot-email-input').value;
+    const errorDiv = document.getElementById('forgot-error-msg');
+    errorDiv.classList.add('hidden');
+
+    try {
+      const res = await fetch('/api/v1/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      errorDiv.textContent = data.message || "Reset link dispatched if email exists.";
+      errorDiv.className = "alert alert-success mt-2";
+      errorDiv.classList.remove('hidden');
+    } catch (e) {
+      errorDiv.textContent = "Error requesting password reset.";
+      errorDiv.className = "alert alert-error mt-2";
+      errorDiv.classList.remove('hidden');
+    }
+  });
+
+  // Submit Change Password
+  document.getElementById('submit-change-password-btn')?.addEventListener('click', async () => {
+    const old_password = document.getElementById('change-old-password').value;
+    const new_password = document.getElementById('change-new-password').value;
+    const msgDiv = document.getElementById('change-password-msg');
+
+    msgDiv.classList.add('hidden');
+    try {
+      const res = await fetch('/api/v1/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_password, new_password })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        msgDiv.textContent = "Password updated successfully!";
+        msgDiv.className = "alert alert-success mt-3";
+        msgDiv.classList.remove('hidden');
+        document.getElementById('change-old-password').value = '';
+        document.getElementById('change-new-password').value = '';
+      } else {
+        msgDiv.textContent = data.detail || "Failed to change password.";
+        msgDiv.className = "alert alert-error mt-3";
+        msgDiv.classList.remove('hidden');
+      }
+    } catch (e) {
+      msgDiv.textContent = "Error changing password.";
+      msgDiv.className = "alert alert-error mt-3";
+      msgDiv.classList.remove('hidden');
+    }
+  });
+}
+
+// Initialize Auth on Startup
+document.addEventListener('DOMContentLoaded', () => {
+  AuthState.check();
+  setupAuthHandlers();
+});
+

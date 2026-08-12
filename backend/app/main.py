@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
+from sqlalchemy import func
 
 from backend.app.config import settings
 from backend.app.database import init_db, AsyncSessionLocal
@@ -19,14 +20,7 @@ from backend.app.api.analytics import router as analytics_router
 from backend.app.api.ai import router as ai_router
 from backend.app.api.applications import router as applications_router
 from backend.app.api.dashboard import router as dashboard_router
-
-async def run_startup_seed():
-    await asyncio.sleep(1.0)
-    async with AsyncSessionLocal() as session:
-        try:
-            await scheduler_engine.run_discovery_cycle(session)
-        except Exception as e:
-            print(f"[STARTUP SEED ERROR] {e}")
+from backend.app.api.auth import router as auth_router
 
 async def run_15min_dead_link_worker():
     """
@@ -48,26 +42,34 @@ async def run_15min_dead_link_worker():
 
 async def run_hourly_job_update_worker():
     """
-    Continuous Background Worker (runs every 1 hour / 3600 seconds):
-    Runs the discovery cycle to update jobs hour to hour.
+    Continuous Background Worker:
+    1. Executes job discovery cycle IMMEDIATELY upon application startup.
+    2. Waits DISCOVERY_INTERVAL_SECONDS (default 3600s / 1 hour) before subsequent cycles.
     """
+    if not settings.ENABLE_SCHEDULER:
+        print("[HOURLY WORKER] Scheduler disabled via ENABLE_SCHEDULER=False.")
+        return
+
+    interval = getattr(settings, "DISCOVERY_INTERVAL_SECONDS", 3600)
+    print(f"[HOURLY WORKER] Initialized. Running immediate discovery cycle, then repeating every {interval}s.")
+
     while True:
         try:
-            await asyncio.sleep(3600) # 1 hour
-            print("[HOURLY WORKER] Starting continuous job discovery cycle...")
+            print("[HOURLY WORKER] Starting job discovery cycle...")
             async with AsyncSessionLocal() as session:
                 await scheduler_engine.run_discovery_cycle(session)
-                print("[HOURLY WORKER] Job discovery cycle complete.")
+            print(f"[HOURLY WORKER] Job discovery cycle complete. Waiting {interval}s for next cycle...")
         except Exception as e:
             print(f"[HOURLY WORKER ERROR] {e}")
 
+        await asyncio.sleep(interval)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB tables
+    # Initialize DB tables and migrations
     await init_db()
     
-    # Launch startup seed and 15-minute continuous dead-link worker
-    asyncio.create_task(run_startup_seed())
+    # Launch immediate discovery worker and 15-minute continuous dead-link worker
     asyncio.create_task(run_15min_dead_link_worker())
     asyncio.create_task(run_hourly_job_update_worker())
 
@@ -80,17 +82,28 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for local dev
+# Enable CORS configured via ALLOWED_ORIGINS (never wildcard when allow_credentials=True)
+raw_origins = getattr(settings, "ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000")
+if isinstance(raw_origins, str):
+    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip() and o.strip() != "*"]
+else:
+    allowed_origins = [o for o in raw_origins if o != "*"]
+
+if not allowed_origins:
+    allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 # Mount REST API Routers under /api/v1
 prefix = settings.API_PREFIX
+app.include_router(auth_router, prefix=prefix)
 app.include_router(jobs_router, prefix=prefix)
 app.include_router(searches_router, prefix=prefix)
 app.include_router(connectors_router, prefix=prefix)
@@ -113,3 +126,4 @@ async def root():
         "status": "ONLINE",
         "documentation": "/docs"
     }
+

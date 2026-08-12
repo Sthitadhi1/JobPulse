@@ -5,13 +5,15 @@ from sqlalchemy.future import select
 from sqlalchemy import func, desc, or_
 
 from backend.app.database import get_db
-from backend.app.models.job import Job, Bookmark, ApplicationTracker
+from backend.app.models.job import Job, Bookmark, ApplicationTracker, User
+from backend.app.api.auth import get_current_user_optional
 from backend.app.models.search_request import SearchRequest
 from backend.app.engine.search import SearchEngine
 from backend.app.engine.normalizer import NormalizerEngine
 from backend.app.engine.deduplicator import DeduplicatorEngine
 from backend.app.engine.scheduler import SchedulerEngine
 from backend.app.connectors.registry import connector_registry
+
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -155,8 +157,10 @@ async def list_jobs(
     india_or_remote_only: Optional[bool] = Query(False),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
+
     stmt = select(Job)
 
     if status:
@@ -200,7 +204,10 @@ async def list_jobs(
         stmt = stmt.where(Job.verification_status == verification_status)
 
     if bookmarked_only:
-        stmt = stmt.where(Job.is_bookmarked == True)
+        if current_user:
+            stmt = stmt.join(Bookmark, Bookmark.job_id == Job.id).where(Bookmark.user_id == current_user.id)
+        else:
+            stmt = stmt.where(Job.is_bookmarked == True)
 
     total_res = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total_records = total_res.scalar() or 0
@@ -258,19 +265,40 @@ async def list_jobs(
     }
 
 @router.post("/{job_id}/bookmark")
-async def toggle_bookmark(job_id: int, db: AsyncSession = Depends(get_db)):
+async def toggle_bookmark(
+    job_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
     res = await db.execute(select(Job).where(Job.id == job_id))
     job = res.scalars().first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    job.is_bookmarked = not job.is_bookmarked
+    user_id = current_user.id if current_user else None
+
+    if user_id:
+        bm_res = await db.execute(select(Bookmark).where(Bookmark.job_id == job_id, Bookmark.user_id == user_id))
+        bm = bm_res.scalars().first()
+        if bm:
+            await db.delete(bm)
+            is_bookmarked = False
+        else:
+            new_bm = Bookmark(job_id=job_id, user_id=user_id)
+            db.add(new_bm)
+            is_bookmarked = True
+        job.is_bookmarked = is_bookmarked
+    else:
+        job.is_bookmarked = not job.is_bookmarked
+        is_bookmarked = job.is_bookmarked
+
     await db.commit()
 
     return {
         "success": True,
         "data": {
             "id": job.id,
-            "is_bookmarked": job.is_bookmarked
+            "is_bookmarked": is_bookmarked
         }
     }
+

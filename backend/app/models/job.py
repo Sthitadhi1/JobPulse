@@ -14,8 +14,12 @@ class User(Base):
     telegram_connected = Column(Boolean, default=False)
     telegram_token = Column(String(100), nullable=True, index=True)
     last_notification_sent = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    is_active = Column(Boolean, default=True, index=True)
+    email_verified = Column(Boolean, default=False, index=True)
+    last_login_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
 
 class CompanyRegistry(Base):
     __tablename__ = "company_registry"
@@ -159,6 +163,7 @@ class ConnectorExecution(Base):
     __tablename__ = "connector_executions"
 
     id = Column(Integer, primary_key=True, index=True)
+    execution_id = Column(String(36), nullable=True, index=True)
     connector_name = Column(String(100), nullable=False, index=True)
     source_type = Column(String(50), nullable=False, default="Company")
     started_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
@@ -173,3 +178,13 @@ class ConnectorExecution(Base):
     errors_count = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
     status = Column(String(50), default="SUCCESS", index=True)
+
+class DiscoveryLock(Base):
+    __tablename__ = "discovery_locks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lock_name = Column(String(50), unique=True, index=True, nullable=False)
+    is_locked = Column(Boolean, default=False, nullable=False)
+    execution_id = Column(String(36), nullable=True)
+    locked_at = Column(DateTime, nullable=True)
+

@@ -28,6 +28,9 @@ async def get_db():
             await session.close()
 
 async def init_db():
+    # Import all models to ensure they are registered with Base.metadata
+    import backend.app.models
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
@@ -69,7 +72,10 @@ async def init_db():
         user_migrations = [
             ("telegram_connected", "ALTER TABLE users ADD COLUMN telegram_connected BOOLEAN DEFAULT 0"),
             ("telegram_token", "ALTER TABLE users ADD COLUMN telegram_token VARCHAR(100) NULL"),
-            ("last_notification_sent", "ALTER TABLE users ADD COLUMN last_notification_sent DATETIME NULL")
+            ("last_notification_sent", "ALTER TABLE users ADD COLUMN last_notification_sent DATETIME NULL"),
+            ("email_verified", "ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"),
+            ("last_login_at", "ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL"),
+            ("updated_at", "ALTER TABLE users ADD COLUMN updated_at DATETIME NULL")
         ]
         for col_name, stmt in user_migrations:
             if col_name not in user_cols:
@@ -93,7 +99,8 @@ async def init_db():
         exec_cols = await get_existing_columns("connector_executions")
         exec_migrations = [
             ("jobs_verified", "ALTER TABLE connector_executions ADD COLUMN jobs_verified INTEGER DEFAULT 0"),
-            ("jobs_removed", "ALTER TABLE connector_executions ADD COLUMN jobs_removed INTEGER DEFAULT 0")
+            ("jobs_removed", "ALTER TABLE connector_executions ADD COLUMN jobs_removed INTEGER DEFAULT 0"),
+            ("execution_id", "ALTER TABLE connector_executions ADD COLUMN execution_id VARCHAR(36) NULL")
         ]
         for col_name, stmt in exec_migrations:
             if col_name not in exec_cols:
@@ -101,5 +108,6 @@ async def init_db():
                     await conn.execute(text(stmt))
                 except Exception:
                     pass
+
 
 

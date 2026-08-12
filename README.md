@@ -286,6 +286,48 @@ Access the live containerized application at `http://localhost:8000`.
 
 ---
 
+# ⚙️ Production Scheduler & Architecture
+
+JobPulse includes a production-ready scheduling and concurrency engine:
+
+### ⏱️ Hourly Discovery Scheduler
+- **Immediate Startup Execution**: The scheduler initiates a job discovery cycle immediately upon application startup—no waiting 1 hour for the first run.
+- **Configurable Interval**: Executes every `DISCOVERY_INTERVAL_SECONDS` (default: `3600` seconds / 1 hour).
+- **Protected Remote Endpoint**: External schedulers and cron services can trigger discovery via `POST /api/v1/connectors/run` by supplying header `X-Scheduler-Secret: <SCHEDULER_SECRET>`.
+
+### ⚡ Concurrent Connector Execution
+- **Controlled Concurrency**: Executes connectors in parallel using `asyncio.gather()` bounded by `asyncio.Semaphore(CONNECTOR_MAX_CONCURRENCY)` (default: `5`).
+- **Database Safety**: Each concurrent connector task runs within its own independent `AsyncSessionLocal()` database session to adhere to SQLAlchemy async thread safety.
+- **Fault Isolation**: A failure in any single connector is caught safely and never interrupts other executing connectors.
+
+### 🔒 Discovery Lock & Execution Telemetry
+- **Distributed DB Lock**: Uses a database-backed `DiscoveryLock` table to guarantee that only ONE discovery cycle executes at any given time across multi-worker environments.
+- **Correlation ID**: Every discovery cycle assigns a unique `execution_id` (UUID) passed down to all connector tasks, recording `ConnectorExecution` and `ConnectorHealth` telemetry.
+
+---
+
+# 🔐 User Authentication & Authorization
+
+JobPulse provides complete user authentication and account authorization:
+
+- **Auth Endpoints**:
+  - `POST /api/v1/auth/signup`: Account creation with automatic email verification dispatch.
+  - `POST /api/v1/auth/login`: HttpOnly cookie & bearer token session creation.
+  - `POST /api/v1/auth/logout`: Revokes active user session.
+  - `GET /api/v1/auth/verify-email`: Single-use cryptographically secure email verification token.
+  - `POST /api/v1/auth/request-otp` & `POST /api/v1/auth/verify-otp`: Rate-limited 6-digit OTP verification.
+  - `POST /api/v1/auth/forgot-password` & `POST /api/v1/auth/reset-password`: Hashed token password reset.
+  - `GET /api/v1/auth/me`: Current session inspection.
+- **Security Guardrails**:
+  - Password hashing with Argon2id / bcrypt.
+  - HttpOnly, SameSite=Lax session cookies.
+  - Strict backend authorization on `SavedSearch`, `Bookmark`, and `ApplicationTracker` objects preventing IDOR vulnerabilities.
+- **Third-Party Security Policy**:
+  - **Zero Credential Scraping**: JobPulse **never** asks for, collects, or stores passwords, cookies, or OTPs for third-party job boards (LinkedIn, Naukri, etc.). All ingestion uses public endpoints and official APIs.
+
+
+---
+
 # 🗺️ Roadmap
 
 - [x] Project Architecture & Database Schema

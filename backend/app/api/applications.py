@@ -11,21 +11,27 @@ from sqlalchemy import func
 
 from backend.app.database import get_db
 from backend.app.models.application import JobApplication, ApplicationTimeline
+from backend.app.models.job import User
+from backend.app.api.auth import get_current_user_optional
 
 router = APIRouter(prefix="/applications", tags=["Applications Workspace"])
 
 @router.get("")
 async def list_applications(
     status: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(JobApplication)
+    if current_user:
+        stmt = stmt.where((JobApplication.user_id == current_user.id) | (JobApplication.user_id == "default_user"))
     if status:
         stmt = stmt.where(JobApplication.status == status)
     stmt = stmt.order_by(JobApplication.updated_at.desc())
 
     res = await db.execute(stmt)
     apps = res.scalars().all()
+
 
     output = []
     for a in apps:
@@ -70,6 +76,7 @@ async def list_applications(
 @router.post("")
 async def create_application(
     data: dict,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     company = data.get("company")
@@ -77,7 +84,10 @@ async def create_application(
     if not company or not role:
         raise HTTPException(status_code=400, detail="Company and Role are required.")
 
+    user_id = current_user.id if current_user else "default_user"
+
     app = JobApplication(
+        user_id=user_id,
         company=company,
         role=role,
         source=data.get("source", "Manual"),
@@ -112,12 +122,17 @@ async def create_application(
 async def update_application(
     app_id: int,
     data: dict,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(select(JobApplication).where(JobApplication.id == app_id))
     app = res.scalars().first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
+
+    if app.user_id and app.user_id != "default_user":
+        if not current_user or app.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden. You do not own this application record.")
 
     old_status = app.status
     new_status = data.get("status", old_status)
@@ -151,6 +166,7 @@ async def update_application(
 @router.delete("/{app_id}")
 async def delete_application(
     app_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(select(JobApplication).where(JobApplication.id == app_id))
@@ -158,8 +174,13 @@ async def delete_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
+    if app.user_id and app.user_id != "default_user":
+        if not current_user or app.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden. You do not own this application record.")
+
     await db.delete(app)
     await db.commit()
+
     return {"success": True, "message": "Application deleted."}
 
 @router.post("/import")

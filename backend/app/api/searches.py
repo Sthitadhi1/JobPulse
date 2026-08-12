@@ -5,7 +5,8 @@ from sqlalchemy.future import select
 from pydantic import BaseModel
 
 from backend.app.database import get_db
-from backend.app.models.job import SavedSearch
+from backend.app.models.job import SavedSearch, User
+from backend.app.api.auth import get_current_user_optional
 
 router = APIRouter(prefix="/search/saved", tags=["Saved Searches"])
 
@@ -20,8 +21,18 @@ class SavedSearchCreate(BaseModel):
     telegram_chat_id: Optional[str] = None
 
 @router.get("")
-async def list_saved_searches(db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(SavedSearch).order_by(SavedSearch.id.desc()))
+async def list_saved_searches(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(SavedSearch)
+    if current_user:
+        stmt = stmt.where(SavedSearch.user_id == current_user.id)
+    else:
+        stmt = stmt.where(SavedSearch.user_id == None)
+    stmt = stmt.order_by(SavedSearch.id.desc())
+
+    res = await db.execute(stmt)
     searches = res.scalars().all()
     
     return {
@@ -30,6 +41,7 @@ async def list_saved_searches(db: AsyncSession = Depends(get_db)):
         "data": [
             {
                 "id": s.id,
+                "user_id": s.user_id,
                 "name": s.name,
                 "query": s.query,
                 "keywords": s.keywords,
@@ -47,8 +59,14 @@ async def list_saved_searches(db: AsyncSession = Depends(get_db)):
     }
 
 @router.post("")
-async def create_saved_search(body: SavedSearchCreate, db: AsyncSession = Depends(get_db)):
+async def create_saved_search(
+    body: SavedSearchCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+    user_id = current_user.id if current_user else None
     search_obj = SavedSearch(
+        user_id=user_id,
         name=body.name,
         query=body.query,
         keywords=body.keywords or body.query,
@@ -56,7 +74,7 @@ async def create_saved_search(body: SavedSearchCreate, db: AsyncSession = Depend
         min_salary_lpa=body.min_salary_lpa,
         experience_level=body.experience_level,
         remote_type=body.remote_type,
-        telegram_chat_id=body.telegram_chat_id or "STUDENT_TELEGRAM_DEMO",
+        telegram_chat_id=body.telegram_chat_id or (current_user.telegram_chat_id if current_user else None) or "STUDENT_TELEGRAM_DEMO",
         is_active=True
     )
     db.add(search_obj)
@@ -68,6 +86,7 @@ async def create_saved_search(body: SavedSearchCreate, db: AsyncSession = Depend
         "message": "Saved search created.",
         "data": {
             "id": search_obj.id,
+            "user_id": search_obj.user_id,
             "name": search_obj.name,
             "query": search_obj.query,
             "is_active": search_obj.is_active
@@ -75,11 +94,19 @@ async def create_saved_search(body: SavedSearchCreate, db: AsyncSession = Depend
     }
 
 @router.patch("/{search_id}/toggle")
-async def toggle_saved_search(search_id: int, db: AsyncSession = Depends(get_db)):
+async def toggle_saved_search(
+    search_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
     res = await db.execute(select(SavedSearch).where(SavedSearch.id == search_id))
     search_obj = res.scalars().first()
     if not search_obj:
         raise HTTPException(status_code=404, detail="Saved search not found.")
+
+    if search_obj.user_id:
+        if not current_user or search_obj.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden. You do not own this saved search.")
 
     search_obj.is_active = not search_obj.is_active
     await db.commit()
@@ -91,11 +118,19 @@ async def toggle_saved_search(search_id: int, db: AsyncSession = Depends(get_db)
     }
 
 @router.delete("/{search_id}")
-async def delete_saved_search(search_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_saved_search(
+    search_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
     res = await db.execute(select(SavedSearch).where(SavedSearch.id == search_id))
     search_obj = res.scalars().first()
     if not search_obj:
         raise HTTPException(status_code=404, detail="Saved search not found.")
+
+    if search_obj.user_id:
+        if not current_user or search_obj.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden. You do not own this saved search.")
 
     await db.delete(search_obj)
     await db.commit()
@@ -105,3 +140,5 @@ async def delete_saved_search(search_id: int, db: AsyncSession = Depends(get_db)
         "message": "Saved search deleted.",
         "data": {"id": search_id}
     }
+
+
