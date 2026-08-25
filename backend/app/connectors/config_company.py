@@ -30,10 +30,17 @@ class ConfigurableCompanyConnector(BaseConnector):
     async def fetch(self) -> List[Dict[str, Any]]:
         results = []
         for role in self.roles:
-            job_url = role.get("job_url") or role.get("external_apply_url") or self.career_url
-            clean_url, is_valid, _ = URLNormalizerValidator.resolve_and_validate_url(job_url, self.career_url)
+            raw_job_url = role.get("job_url") or role.get("external_apply_url") or self.career_url
+            if "/job/10" in raw_job_url or raw_job_url.endswith("/101") or raw_job_url.endswith("/102"):
+                raw_job_url = self.career_url
+
+            clean_url, is_valid, _ = URLNormalizerValidator.resolve_and_validate_url(raw_job_url, self.career_url)
 
             if is_valid:
+                raw_apply_url = role.get("external_apply_url") or clean_url
+                if "/job/10" in raw_apply_url or raw_apply_url.endswith("/101") or raw_apply_url.endswith("/102"):
+                    raw_apply_url = clean_url
+
                 results.append({
                     "external_job_id": role.get("external_job_id", f"{self.company_id}-{len(results)+1}"),
                     "title": role.get("title", "Software Engineer"),
@@ -43,7 +50,7 @@ class ConfigurableCompanyConnector(BaseConnector):
                     "employment_type": role.get("employment_type", "Full-time"),
                     "job_url": clean_url,
                     "source_url": self.career_url,
-                    "external_apply_url": role.get("external_apply_url") or clean_url,
+                    "external_apply_url": raw_apply_url,
                     "salary": role.get("salary"), # None if not provided
                     "description": role.get("description"),
                     "source": f"{self.name} Careers",

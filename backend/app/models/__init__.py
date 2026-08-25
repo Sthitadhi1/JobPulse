@@ -8,7 +8,9 @@ from backend.app.models.job import (
     NotificationLog,
     ConnectorHealth,
     ConnectorExecution,
-    DiscoveryLock
+    DiscoveryLock,
+    CandidateProfile,
+    ResumeRecommendationCache
 )
 from backend.app.models.auth_models import (
     EmailVerificationToken,
@@ -28,6 +30,8 @@ __all__ = [
     "ConnectorHealth",
     "ConnectorExecution",
     "DiscoveryLock",
+    "CandidateProfile",
+    "ResumeRecommendationCache",
     "EmailVerificationToken",
     "PasswordResetToken",
     "OtpRecord",

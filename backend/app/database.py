@@ -73,7 +73,9 @@ async def init_db():
             ("last_seen", "ALTER TABLE jobs ADD COLUMN last_seen DATETIME NULL"),
             ("last_verified", "ALTER TABLE jobs ADD COLUMN last_verified DATETIME NULL"),
             ("verification_count", "ALTER TABLE jobs ADD COLUMN verification_count INTEGER DEFAULT 1"),
-            ("consecutive_missing_count", "ALTER TABLE jobs ADD COLUMN consecutive_missing_count INTEGER DEFAULT 0")
+            ("consecutive_missing_count", "ALTER TABLE jobs ADD COLUMN consecutive_missing_count INTEGER DEFAULT 0"),
+            ("closed_at", "ALTER TABLE jobs ADD COLUMN closed_at DATETIME NULL"),
+            ("closure_reason", "ALTER TABLE jobs ADD COLUMN closure_reason VARCHAR(255) NULL")
         ]
 
         for col_name, stmt in job_migrations:

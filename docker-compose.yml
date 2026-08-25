@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  jobpulse-web:
+    build: .
+    container_name: jobpulse_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=sqlite+aiosqlite:///./jobpulse.db
+      - ENABLE_SCHEDULER=true
+      - DISCOVERY_INTERVAL_SECONDS=3600
+      - ALLOWED_ORIGINS=*
+    volumes:
+      - jobpulse_data:/app/data
+      - ./jobpulse.db:/app/jobpulse.db
+
+  # Optional Background Automation Worker Container
+  jobpulse-worker:
+    build: .
+    container_name: jobpulse_worker
+    restart: always
+    command: ["python", "-m", "backend.run_worker", "--mode=daemon", "--interval=1800"]
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./jobpulse.db
+    volumes:
+      - ./jobpulse.db:/app/jobpulse.db
+    depends_on:
+      - jobpulse-web
+
+volumes:
+  jobpulse_data:

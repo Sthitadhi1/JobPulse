@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JobPulse — Real-Time Job Discovery Platform</title>
+  <title>JobPulse — Real-Time Job Discovery & Career Intelligence Platform</title>
   <!-- Modern Font Imports -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,24 +11,91 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div id="app" class="app-layout">
-    <!-- Ambient Aceternity Mesh Background Glow -->
+
+  <!-- ==========================================================================
+       1. AUTHENTICATION & LANDING SCREEN (Shown when unauthenticated)
+       ========================================================================== -->
+  <div id="auth-screen" class="auth-screen-container">
+    <div class="ambient-mesh"></div>
+    <div class="auth-card">
+      <div class="auth-header">
+        <img src="assets/logo.png" alt="JobPulse Logo" class="auth-brand-logo" width="64" height="64" style="width: 64px; height: 64px; max-width: 64px; max-height: 64px; object-fit: cover;">
+        <h1 class="auth-title">JobPulse</h1>
+        <p class="auth-subtitle">Intelligent Job-Search & Career Operating System</p>
+      </div>
+
+      <!-- Auth Tab Navigation (Login vs Signup) -->
+      <div class="auth-tabs">
+        <button id="auth-tab-login" class="auth-tab-btn active">Log In</button>
+        <button id="auth-tab-signup" class="auth-tab-btn">Sign Up</button>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <form id="auth-login-form">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="auth-login-email" class="input-field" placeholder="name@example.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="auth-login-password" class="input-field" placeholder="••••••••" required>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <label style="font-size: 12px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <input type="checkbox" id="auth-remember-me" checked> Remember me
+          </label>
+          <a href="#" id="auth-forgot-link" style="font-size: 12px; color: var(--accent-blue); text-decoration: none;">Forgot password?</a>
+        </div>
+        <button type="submit" id="auth-login-btn" class="btn btn-primary" style="width: 100%; padding: 10px;">
+          Log In to JobPulse
+        </button>
+        <div id="auth-login-msg" class="alert alert-error hidden"></div>
+      </form>
+
+      <!-- SIGNUP FORM -->
+      <form id="auth-signup-form" class="hidden">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="auth-signup-name" class="input-field" placeholder="Sthitadhi Doe" required>
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="auth-signup-email" class="input-field" placeholder="name@example.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password (Min 6 chars)</label>
+          <input type="password" id="auth-signup-password" class="input-field" placeholder="••••••••" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="auth-signup-confirm" class="input-field" placeholder="••••••••" required>
+        </div>
+        <button type="submit" id="auth-signup-btn" class="btn btn-primary" style="width: 100%; padding: 10px;">
+          Create JobPulse Account
+        </button>
+        <div id="auth-signup-msg" class="alert alert-error hidden"></div>
+      </form>
+
+    </div>
+  </div>
+
+
+  <!-- ==========================================================================
+       2. PROTECTED WORKSPACE (Shown post-authentication)
+       ========================================================================== -->
+  <div id="app-workspace" class="app-layout hidden">
+    <!-- Ambient Background Glow -->
     <div class="ambient-mesh"></div>
 
     <!-- Top Navigation Header -->
     <header class="top-header">
       <div class="header-brand">
-        <img src="assets/logo.png" alt="JobPulse Logo" class="brand-logo-img">
+        <img src="assets/logo.png" alt="JobPulse Logo" class="brand-logo-img" width="48" height="48" style="width: 48px; height: 48px; max-width: 48px; max-height: 48px; object-fit: cover;">
         <span class="brand-title">JobPulse</span>
         <span class="badge badge-pulse">LIVE INDEXING</span>
       </div>
 
       <div class="header-actions">
-        <button id="cmd-k-btn" class="cmd-k-trigger" title="Press Ctrl+K">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <span>Search opportunities...</span>
-          <kbd>⌘K</kbd>
-        </button>
         <button id="sync-now-btn" class="btn btn-sm btn-outline">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           <span>Sync Sources</span>
@@ -39,33 +106,54 @@
         <div class="notification-bell" id="notif-bell" title="Notification Center">
           🔔 <span id="notif-count" class="bell-badge">0</span>
         </div>
-        <!-- Auth Header Actions -->
-        <div id="auth-unauthenticated-controls" style="display: flex; gap: 8px;">
-          <button id="open-login-btn" class="btn btn-sm btn-ghost">Log In</button>
-          <button id="open-signup-btn" class="btn btn-sm btn-primary">Sign Up</button>
-        </div>
-        <div id="auth-authenticated-controls" class="hidden" style="display: flex; gap: 8px; align-items: center;">
-          <span id="user-display-name" class="badge badge-outline" style="font-size: 12px; padding: 4px 10px; cursor: pointer;">User</span>
-          <button id="header-logout-btn" class="btn btn-sm btn-ghost" title="Log Out">Logout</button>
+
+        <!-- Authenticated User Profile Pill & Dropdown -->
+        <div class="header-user-profile">
+          <div id="header-profile-pill" class="user-profile-pill">
+            <div id="header-user-avatar" class="user-avatar">S</div>
+            <span id="header-user-name" class="user-name-text">Sthitadhi</span>
+            <span style="font-size: 10px; color: var(--text-muted);">▼</span>
+          </div>
+          <div id="header-profile-dropdown" class="profile-dropdown-menu hidden">
+            <div style="padding: 6px 12px; font-size: 11px; color: var(--text-muted); font-weight: 600;">SIGNED IN AS</div>
+            <div id="dropdown-user-email" style="padding: 0 12px 6px 12px; font-size: 12px; font-weight: 600; color: var(--text-primary);">user@example.com</div>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" data-goto-tab="profile">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              <span>Account Profile</span>
+            </button>
+            <button id="header-logout-action" class="dropdown-item" style="color: #ef4444;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              <span>Log Out</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>
 
     <!-- Main Workspace Grid -->
     <div class="main-workspace">
-      <!-- Left Navigation Sidebar -->
+      <!-- Sidebar Navigation -->
       <aside class="sidebar">
         <nav class="nav-menu">
-          <a href="#" class="nav-item active" data-tab="jobs">
+          <a href="#" class="nav-item active" data-tab="dashboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="#" class="nav-item" data-tab="jobs">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
             <span>Discover Jobs</span>
+          </a>
+          <a href="#" class="nav-item" data-tab="resume-match">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>Resume Match</span>
           </a>
           <a href="#" class="nav-item" data-tab="searches">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
             <span>Search Alerts</span>
           </a>
           <a href="#" class="nav-item" data-tab="applications">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
             <span>Application Kanban</span>
           </a>
           <a href="#" class="nav-item" data-tab="bookmarks">
@@ -90,7 +178,6 @@
           </a>
         </nav>
 
-
         <div class="sidebar-footer">
           <div class="status-indicator">
             <span class="dot active"></span>
@@ -102,8 +189,149 @@
       <!-- Main Content Area -->
       <main class="content-area">
 
-        <!-- TAB 1: DISCOVER JOBS -->
-        <section id="tab-jobs" class="tab-pane active">
+        <!-- ==================================================================
+             TAB 1: POST-LOGIN COMMAND CENTER DASHBOARD
+             ================================================================== -->
+        <section id="tab-dashboard" class="tab-pane active">
+          <!-- Hero Greeting -->
+          <div class="dashboard-hero">
+            <h1 id="dashboard-user-greeting">Good morning, Sthitadhi 👋</h1>
+            <p class="text-muted">Here's your job search overview</p>
+          </div>
+
+          <!-- 4 Stat Overview Cards -->
+          <div class="dashboard-overview-grid">
+            <div class="overview-card">
+              <div class="overview-icon-box icon-box-blue">💼</div>
+              <div class="overview-info">
+                <span id="dash-stat-active-jobs" class="overview-number">1,233</span>
+                <span class="overview-label">Active Jobs</span>
+                <span class="overview-status-text">🟢 Verified & Live</span>
+              </div>
+            </div>
+
+            <div class="overview-card">
+              <div class="overview-icon-box icon-box-green">🎯</div>
+              <div class="overview-info">
+                <span id="dash-stat-top-matches" class="overview-number">30</span>
+                <span class="overview-label">Top Matches</span>
+                <span class="overview-status-text">🎯 For Your Profile</span>
+              </div>
+            </div>
+
+            <div class="overview-card">
+              <div class="overview-icon-box icon-box-purple">📄</div>
+              <div class="overview-info">
+                <span id="dash-stat-applications" class="overview-number">8</span>
+                <span class="overview-label">Applications</span>
+                <span class="overview-status-text">📄 In Progress</span>
+              </div>
+            </div>
+
+            <div class="overview-card">
+              <div class="overview-icon-box icon-box-amber">⭐</div>
+              <div class="overview-info">
+                <span id="dash-stat-bookmarked" class="overview-number">12</span>
+                <span class="overview-label">Bookmarked Jobs</span>
+                <span class="overview-status-text">⭐ Saved Jobs</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2-Column Dashboard Main Section -->
+          <div class="dashboard-main-grid">
+            <!-- Left Card: Resume Match Box -->
+            <div class="dashboard-card">
+              <div>
+                <div class="card-header-flex">
+                  <div class="card-title-box">
+                    <h3>🎯 Resume Match</h3>
+                  </div>
+                </div>
+                <p class="text-muted text-sm mb-4">Upload your resume and get AI-powered job recommendations</p>
+
+                <!-- Drag & Drop Zone -->
+                <div id="dashboard-resume-dropzone" class="resume-dropzone">
+                  <div style="font-size: 32px; margin-bottom: 8px;">☁️</div>
+                  <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Drag & drop your resume here</div>
+                  <div class="text-muted text-xs mb-3">or</div>
+                  <label for="dashboard-resume-file-input" class="btn btn-sm btn-primary" style="cursor: pointer; display: inline-flex;">
+                    Upload Resume
+                  </label>
+                  <input type="file" id="dashboard-resume-file-input" accept=".pdf,.docx,.doc" class="hidden">
+                  <div class="text-muted text-xs mt-3">PDF / DOCX • Max 10 MB</div>
+                </div>
+                <div id="dashboard-file-badge" class="alert alert-success hidden mb-3"></div>
+              </div>
+
+              <button id="dashboard-analyze-resume-btn" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 15px;">
+                ✨ Analyze My Resume
+              </button>
+            </div>
+
+            <!-- Right Card: Top Matches Preview -->
+            <div class="dashboard-card">
+              <div>
+                <div class="card-header-flex">
+                  <div class="card-title-box">
+                    <h3>🔥 Top Matches (Preview)</h3>
+                  </div>
+                  <a href="#" class="text-sm nav-switch-link" data-switch-tab="resume-match" style="color: var(--accent-blue); text-decoration: none;">View All 30 →</a>
+                </div>
+
+                <div id="dashboard-top-matches-preview-container">
+                  <div class="loading-skeleton">Calculating personalized opportunities...</div>
+                </div>
+              </div>
+
+              <button id="dashboard-view-all-matches-btn" class="btn btn-outline nav-switch-link" data-switch-tab="resume-match" style="width: 100%; margin-top: 16px;">
+                View All 30 Matches
+              </button>
+            </div>
+          </div>
+
+          <!-- Bottom Section: Recent Applications Pipeline -->
+          <div class="card card-padded">
+            <div class="card-header-flex">
+              <div class="card-title-box">
+                <h3>Recent Applications</h3>
+              </div>
+              <a href="#" class="text-sm nav-switch-link" data-switch-tab="applications" style="color: var(--accent-blue); text-decoration: none;">View Kanban →</a>
+            </div>
+
+            <div class="pipeline-container">
+              <div class="pipeline-step">
+                <span style="color: var(--text-muted);">🔖 Saved</span>
+                <span id="dash-pipe-saved" class="badge badge-outline">0</span>
+              </div>
+              <span class="pipeline-arrow">›</span>
+              <div class="pipeline-step">
+                <span style="color: var(--accent-blue);">📤 Applied</span>
+                <span id="dash-pipe-applied" class="badge badge-outline">0</span>
+              </div>
+              <span class="pipeline-arrow">›</span>
+              <div class="pipeline-step">
+                <span style="color: var(--accent-purple);">⚙️ OA / Test</span>
+                <span id="dash-pipe-oa" class="badge badge-outline">0</span>
+              </div>
+              <span class="pipeline-arrow">›</span>
+              <div class="pipeline-step">
+                <span style="color: #f59e0b;">💬 Interview</span>
+                <span id="dash-pipe-interview" class="badge badge-outline">0</span>
+              </div>
+              <span class="pipeline-arrow">›</span>
+              <div class="pipeline-step">
+                <span style="color: #10b981;">🎉 Offer</span>
+                <span id="dash-pipe-offer" class="badge badge-outline">0</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             TAB 2: DISCOVER JOBS
+             ================================================================== -->
+        <section id="tab-jobs" class="tab-pane">
           <!-- Search & Filter Header -->
           <div class="search-panel">
             <div class="search-input-wrapper">
@@ -114,7 +342,7 @@
               </button>
             </div>
 
-            <!-- Sleek Pill Button Salary Chips -->
+            <!-- Salary Chips -->
             <div class="salary-chips-row">
               <span class="chip-label">Salary Range:</span>
               <button class="salary-chip active" data-min="" data-max="">All</button>
@@ -138,8 +366,6 @@
                   <option value="Mid-Level">⚙️ Mid-Level (1-4 YOE / SDE 2)</option>
                   <option value="Senior">🔥 Senior (4+ YOE / SDE 3)</option>
                   <option value="Lead">👑 Lead / Tech Lead</option>
-                  <option value="Staff">⚡ Staff Engineer</option>
-                  <option value="Principal">🏛️ Principal Engineer</option>
                 </select>
               </div>
 
@@ -194,7 +420,35 @@
           </div>
         </section>
 
-        <!-- TAB 2: SAVED SEARCHES -->
+        <!-- ==================================================================
+             TAB 3: RESUME MATCH & TOP 30 RECOMMENDATIONS
+             ================================================================== -->
+        <section id="tab-resume-match" class="tab-pane">
+          <div class="section-header">
+            <div>
+              <h2>Your Top Opportunities</h2>
+              <p class="text-muted">Based on your resume, JobPulse found the strongest active opportunities for your profile.</p>
+            </div>
+            <div>
+              <label for="resume-tab-file-input" class="btn btn-primary" style="cursor: pointer;">
+                📄 Re-upload Resume
+              </label>
+              <input type="file" id="resume-tab-file-input" accept=".pdf,.docx,.doc" class="hidden">
+            </div>
+          </div>
+
+          <!-- Candidate Profile Summary Bar -->
+          <div id="candidate-profile-summary" class="card card-padded mb-4 hidden"></div>
+
+          <!-- Top 30 Recommendations Feed Grid -->
+          <div id="resume-match-container" class="jobs-grid">
+            <div class="loading-skeleton">Analyzing candidate profile against active jobs...</div>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             TAB 4: SAVED SEARCHES & ALERTS
+             ================================================================== -->
         <section id="tab-searches" class="tab-pane">
           <div class="section-header">
             <div>
@@ -209,7 +463,9 @@
           </div>
         </section>
 
-        <!-- TAB 3: APPLICATION WORKSPACE (KANBAN) -->
+        <!-- ==================================================================
+             TAB 5: APPLICATION WORKSPACE (KANBAN)
+             ================================================================== -->
         <section id="tab-applications" class="tab-pane">
           <div class="section-header">
             <div>
@@ -218,12 +474,10 @@
             </div>
             <div style="display: flex; gap: 10px;">
               <button id="export-applications-btn" class="btn btn-sm btn-outline">📥 Export CSV</button>
-
               <label for="csv-file-input" class="btn btn-sm btn-outline" style="cursor: pointer; margin: 0;">
                 📤 Import CSV
               </label>
               <input type="file" id="csv-file-input" accept=".csv" class="hidden" />
-
               <button id="add-custom-application-btn" class="btn btn-sm btn-primary">➕ Track Application</button>
             </div>
           </div>
@@ -234,7 +488,9 @@
           </div>
         </section>
 
-        <!-- TAB 4: BOOKMARKS -->
+        <!-- ==================================================================
+             TAB 6: BOOKMARKS
+             ================================================================== -->
         <section id="tab-bookmarks" class="tab-pane">
           <div class="section-header">
             <h2>Bookmarked Opportunities</h2>
@@ -246,14 +502,15 @@
           </div>
         </section>
 
-        <!-- TAB 5: ANALYTICS (ACETERNITY BENTO GRID) -->
+        <!-- ==================================================================
+             TAB 7: ANALYTICS (ACETERNITY BENTO GRID)
+             ================================================================== -->
         <section id="tab-analytics" class="tab-pane">
           <div class="section-header">
             <h2>Live Hiring Telemetry & Analytics</h2>
             <p class="text-muted">Real-time stats across tracked company career portals, ATS boards, and hiring conversion.</p>
           </div>
 
-          <!-- Aceternity Bento Grid Container -->
           <div class="bento-grid" id="analytics-bento-grid">
             <div class="bento-card bento-hero">
               <div class="bento-glow"></div>
@@ -285,7 +542,9 @@
           </div>
         </section>
 
-        <!-- TAB 6: SOURCE CONNECTORS -->
+        <!-- ==================================================================
+             TAB 8: SOURCE CONNECTORS
+             ================================================================== -->
         <section id="tab-connectors" class="tab-pane">
           <div class="section-header">
             <div>
@@ -300,7 +559,9 @@
           </div>
         </section>
 
-        <!-- TAB 7: TELEGRAM ALERTS -->
+        <!-- ==================================================================
+             TAB 9: TELEGRAM ALERTS
+             ================================================================== -->
         <section id="tab-telegram" class="tab-pane">
           <div class="section-header">
             <div>
@@ -327,7 +588,9 @@
           </div>
         </section>
 
-        <!-- TAB 8: ACCOUNT PROFILE -->
+        <!-- ==================================================================
+             TAB 10: ACCOUNT PROFILE
+             ================================================================== -->
         <section id="tab-profile" class="tab-pane">
           <div class="section-header">
             <div>
@@ -337,15 +600,7 @@
           </div>
 
           <div id="profile-container" class="card card-padded max-w-lg">
-            <div id="profile-unauth-view">
-              <p class="text-muted">You are currently using JobPulse as a guest. Log in or create an account to persist saved search alerts, application history, and custom bookmarks across devices.</p>
-              <div class="mt-4" style="display: flex; gap: 10px;">
-                <button id="profile-open-login-btn" class="btn btn-primary">Log In</button>
-                <button id="profile-open-signup-btn" class="btn btn-outline">Create Account</button>
-              </div>
-            </div>
-
-            <div id="profile-auth-view" class="hidden">
+            <div id="profile-auth-view">
               <div class="form-group">
                 <label>Full Name:</label>
                 <input type="text" id="profile-name-field" class="input-field" readonly>
@@ -356,9 +611,7 @@
               </div>
               <div class="form-group">
                 <label>Email Verification Status:</label>
-                <div id="profile-verif-badge" class="badge">Unverified</div>
-                <button id="profile-resend-verif-btn" class="btn btn-sm btn-outline mt-2 hidden">⚡ Resend Verification Email</button>
-                <button id="profile-request-otp-btn" class="btn btn-sm btn-outline mt-2">🔢 Request OTP Verification Code</button>
+                <div id="profile-verif-badge" class="badge">Verified</div>
               </div>
 
               <hr style="border-color: var(--border-color); margin: 20px 0;">
@@ -376,7 +629,7 @@
               <div id="change-password-msg" class="alert hidden mt-3"></div>
 
               <hr style="border-color: var(--border-color); margin: 20px 0;">
-              <button id="profile-logout-btn" class="btn btn-outline" style="color: #f43f5e; border-color: #f43f5e;">Log Out</button>
+              <button id="profile-logout-btn" class="btn btn-outline" style="color: #ef4444; border-color: #ef4444;">Log Out</button>
             </div>
           </div>
         </section>
@@ -385,19 +638,11 @@
     </div>
   </div>
 
-  <!-- Command Palette Modal -->
-  <div id="command-palette" class="modal-overlay hidden">
-    <div class="cmd-k-box card">
-      <div class="cmd-k-header">
-        <input type="text" id="cmd-input" placeholder="Type a job title, technology, or company (e.g. Python, Vercel)...">
-      </div>
-      <ul id="cmd-results" class="cmd-k-results">
-        <li class="cmd-item text-muted">Type a tech keyword (e.g. FastAPI, Python, React, Remote)...</li>
-      </ul>
-    </div>
-  </div>
 
-  <!-- Save Search Rule Modal -->
+  <!-- ==========================================================================
+       MODALS (Saved Search, Job Detail, Forgot Password)
+       ========================================================================== -->
+  <!-- Save Search Modal -->
   <div id="save-search-modal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
@@ -421,84 +666,17 @@
     </div>
   </div>
 
-  <!-- Login Modal -->
-  <div id="login-modal" class="modal-overlay hidden">
-    <div class="modal-card max-w-md">
+  <!-- Job Detail Modal -->
+  <div id="job-detail-modal" class="modal-overlay hidden">
+    <div class="modal-card max-w-lg">
       <div class="modal-header">
-        <h3>Log In to JobPulse</h3>
-        <button id="close-login-modal" class="btn btn-ghost btn-sm">✕</button>
+        <h3 id="modal-job-title">Job Details</h3>
+        <button id="close-job-detail-modal" class="btn btn-ghost btn-sm">✕</button>
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Email Address:</label>
-          <input type="email" id="login-email" class="input-field" placeholder="name@example.com">
-        </div>
-        <div class="form-group">
-          <label>Password:</label>
-          <input type="password" id="login-password" class="input-field" placeholder="••••••••">
-        </div>
-        <div id="login-error-msg" class="alert alert-error hidden"></div>
-        <div style="text-align: right; margin-top: 8px;">
-          <a href="#" id="open-forgot-modal" class="text-sm" style="color: #38bdf8;">Forgot password?</a>
-        </div>
-      </div>
+      <div id="modal-job-body" class="modal-body"></div>
       <div class="modal-footer">
-        <button id="cancel-login" class="btn btn-ghost">Cancel</button>
-        <button id="submit-login-btn" class="btn btn-primary">Log In</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Signup Modal -->
-  <div id="signup-modal" class="modal-overlay hidden">
-    <div class="modal-card max-w-md">
-      <div class="modal-header">
-        <h3>Create JobPulse Account</h3>
-        <button id="close-signup-modal" class="btn btn-ghost btn-sm">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Full Name:</label>
-          <input type="text" id="signup-name" class="input-field" placeholder="Jane Doe">
-        </div>
-        <div class="form-group">
-          <label>Email Address:</label>
-          <input type="email" id="signup-email" class="input-field" placeholder="name@example.com">
-        </div>
-        <div class="form-group">
-          <label>Password:</label>
-          <input type="password" id="signup-password" class="input-field" placeholder="Minimum 6 characters">
-        </div>
-        <div class="form-group">
-          <label>Confirm Password:</label>
-          <input type="password" id="signup-confirm-password" class="input-field" placeholder="Confirm password">
-        </div>
-        <div id="signup-error-msg" class="alert alert-error hidden"></div>
-      </div>
-      <div class="modal-footer">
-        <button id="cancel-signup" class="btn btn-ghost">Cancel</button>
-        <button id="submit-signup-btn" class="btn btn-primary">Create Account</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- OTP Modal -->
-  <div id="otp-modal" class="modal-overlay hidden">
-    <div class="modal-card max-w-md">
-      <div class="modal-header">
-        <h3>Verify Email with OTP</h3>
-        <button id="close-otp-modal" class="btn btn-ghost btn-sm">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="text-sm text-muted">Enter the 6-digit verification code sent to your email:</p>
-        <div class="form-group mt-3">
-          <input type="text" id="otp-code-input" class="input-field" placeholder="123456" style="font-size: 20px; letter-spacing: 4px; text-align: center;">
-        </div>
-        <div id="otp-error-msg" class="alert alert-error hidden"></div>
-      </div>
-      <div class="modal-footer">
-        <button id="cancel-otp" class="btn btn-ghost">Cancel</button>
-        <button id="submit-otp-btn" class="btn btn-primary">Verify OTP</button>
+        <button id="close-job-detail-btn" class="btn btn-ghost">Close</button>
+        <a id="modal-job-apply-link" href="#" target="_blank" class="btn btn-primary">Apply Now ↗</a>
       </div>
     </div>
   </div>
@@ -528,4 +706,3 @@
   <script src="js/app.js"></script>
 </body>
 </html>
-

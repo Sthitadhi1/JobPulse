@@ -24,13 +24,13 @@ from backend.app.api.auth import router as auth_router
 
 async def run_15min_dead_link_worker():
     """
-    Continuous Background Worker (runs every 15 minutes / 900 seconds):
-    Verifies all ACTIVE jobs in the database with concurrent HEAD/GET requests.
+    Continuous Background Worker (runs immediately on startup, then every 15 minutes / 900 seconds):
+    Verifies all ACTIVE jobs in the database with concurrent HEAD/GET requests and soft-404 detection.
     Automatically marks 404 / 410 / dead listings as REMOVED.
     """
+    await asyncio.sleep(5) # Brief startup delay
     while True:
         try:
-            await asyncio.sleep(900) # 15 minutes
             print("[15-MIN WORKER] Starting continuous dead link verification cycle...")
             async with AsyncSessionLocal() as session:
                 res = await session.execute(select(Job).where(Job.status == "ACTIVE"))
@@ -39,6 +39,9 @@ async def run_15min_dead_link_worker():
                 print(f"[15-MIN WORKER] Verification complete. Verified live: {v_count}, Auto-removed dead 404s: {r_count}")
         except Exception as e:
             print(f"[15-MIN WORKER ERROR] {e}")
+
+        await asyncio.sleep(900) # 15 minutes
+
 
 async def run_hourly_job_update_worker():
     """
@@ -113,17 +116,25 @@ app.include_router(ai_router, prefix=prefix)
 app.include_router(applications_router, prefix=prefix)
 app.include_router(dashboard_router, prefix=prefix)
 
+from fastapi.responses import RedirectResponse
+
 # Mount static frontend dashboard
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
 if os.path.exists(frontend_dir):
     app.mount("/dashboard", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    # Also mount subdirectories at root for any relative asset paths
+    assets_dir = os.path.join(frontend_dir, "assets")
+    css_dir = os.path.join(frontend_dir, "css")
+    js_dir = os.path.join(frontend_dir, "js")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    if os.path.exists(css_dir):
+        app.mount("/css", StaticFiles(directory=css_dir), name="css")
+    if os.path.exists(js_dir):
+        app.mount("/js", StaticFiles(directory=js_dir), name="js")
 
 @app.get("/")
 async def root():
-    return {
-        "project": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "status": "ONLINE",
-        "documentation": "/docs"
-    }
+    return RedirectResponse(url="/dashboard/", status_code=307)
+
 

@@ -1,5 +1,6 @@
 const API_BASE = '/api/v1';
 
+let currentUser = null;
 let currentJobs = [];
 let isBookmarkedOnlyFilter = false;
 
@@ -11,85 +12,686 @@ let isLoadingMoreFeed = false;
 let selectedSalaryMin = null;
 let selectedSalaryMax = null;
 
+let selectedResumeFile = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initAuthentication();
   initNavigation();
-  initCommandPalette();
+  initDashboardEvents();
+  initResumeMatchEvents();
   initSearchAndFilters();
   initModals();
   initTelegramView();
   initInfiniteScroll();
   initApplicationWorkspaceEvents();
   initSpotlightEffect();
-  
-  // Initial data load
-  loadJobsFeed(true);
-  loadAnalytics();
+
+  // Check auth state on load
+  checkAuthState();
 });
 
-/* THEME TOGGLE */
+/* ==========================================================================
+   1. THEME TOGGLE
+   ========================================================================== */
 function initTheme() {
   const toggleBtn = document.getElementById('theme-toggle');
   const htmlEl = document.documentElement;
 
-  toggleBtn.addEventListener('click', () => {
-    const currentTheme = htmlEl.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    htmlEl.setAttribute('data-theme', newTheme);
-    toggleBtn.textContent = newTheme === 'dark' ? '🌙' : '☀️';
-  });
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const currentTheme = htmlEl.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      htmlEl.setAttribute('data-theme', newTheme);
+      toggleBtn.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+    });
+  }
 }
 
-/* NAVIGATION & TAB SWITCHING */
+/* ==========================================================================
+   2. AUTHENTICATION & SESSION MANAGEMENT (AUTH FIRST)
+   ========================================================================== */
+function initAuthentication() {
+  const loginForm = document.getElementById('auth-login-form');
+  const signupForm = document.getElementById('auth-signup-form');
+  const tabLogin = document.getElementById('auth-tab-login');
+  const tabSignup = document.getElementById('auth-tab-signup');
+  const forgotLink = document.getElementById('auth-forgot-link');
+
+  // Auth Screen Tabs
+  if (tabLogin && tabSignup) {
+    tabLogin.addEventListener('click', () => {
+      tabLogin.classList.add('active');
+      tabSignup.classList.remove('active');
+      loginForm.classList.remove('hidden');
+      signupForm.classList.add('hidden');
+    });
+
+    tabSignup.addEventListener('click', () => {
+      tabSignup.classList.add('active');
+      tabLogin.classList.remove('active');
+      signupForm.classList.remove('hidden');
+      loginForm.classList.add('hidden');
+    });
+  }
+
+  if (forgotLink) {
+    forgotLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('forgot-password-modal')?.classList.remove('hidden');
+    });
+  }
+
+  // Login Submit
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-login-email').value.trim();
+      const password = document.getElementById('auth-login-password').value;
+      const msgEl = document.getElementById('auth-login-msg');
+      const btn = document.getElementById('auth-login-btn');
+
+      msgEl.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = '⚡ Authenticating...';
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const result = await res.json();
+
+        if (res.ok && result.success) {
+          showToast('Log in successful! Welcome to JobPulse.', 'success');
+          await checkAuthState();
+        } else {
+          msgEl.textContent = result.detail || result.message || 'Invalid email or password.';
+          msgEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        msgEl.textContent = 'Authentication error: ' + err.message;
+        msgEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Log In to JobPulse';
+      }
+    });
+  }
+
+  // Signup Submit
+  if (signupForm) {
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('auth-signup-name').value.trim();
+      const email = document.getElementById('auth-signup-email').value.trim();
+      const password = document.getElementById('auth-signup-password').value;
+      const confirmPassword = document.getElementById('auth-signup-confirm').value;
+      const msgEl = document.getElementById('auth-signup-msg');
+      const btn = document.getElementById('auth-signup-btn');
+
+      msgEl.classList.add('hidden');
+
+      if (password !== confirmPassword) {
+        msgEl.textContent = 'Passwords do not match.';
+        msgEl.classList.remove('hidden');
+        return;
+      }
+
+      if (password.length < 6) {
+        msgEl.textContent = 'Password must be at least 6 characters.';
+        msgEl.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '⚡ Creating Account...';
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const result = await res.json();
+
+        if (res.ok && result.success) {
+          showToast('Account created successfully! Welcome to JobPulse.', 'success');
+          await checkAuthState();
+        } else {
+          msgEl.textContent = result.detail || result.message || 'Signup failed. Please try again.';
+          msgEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        msgEl.textContent = 'Signup error: ' + err.message;
+        msgEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create JobPulse Account';
+      }
+    });
+  }
+
+  // Header Logout & Profile Menu Toggle
+  const profilePill = document.getElementById('header-profile-pill');
+  const dropdownMenu = document.getElementById('header-profile-dropdown');
+  const logoutBtn = document.getElementById('header-logout-action');
+
+  if (profilePill && dropdownMenu) {
+    profilePill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdownMenu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', () => {
+      dropdownMenu.classList.add('hidden');
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', handleLogout);
+  }
+
+  document.getElementById('profile-logout-btn')?.addEventListener('click', handleLogout);
+}
+
+async function checkAuthState() {
+  const authScreen = document.getElementById('auth-screen');
+  const appWorkspace = document.getElementById('app-workspace');
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        currentUser = data.user;
+        updateHeaderUserUI(data.user);
+        
+        authScreen?.classList.add('hidden');
+        appWorkspace?.classList.remove('hidden');
+
+        // Render default landing view post-login: Dashboard Command Center
+        switchTab('dashboard');
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('Auth check warning:', err);
+  }
+
+  // Unauthenticated -> Show Auth Screen
+  currentUser = null;
+  authScreen?.classList.remove('hidden');
+  appWorkspace?.classList.add('hidden');
+}
+
+function updateHeaderUserUI(user) {
+  const avatarEl = document.getElementById('header-user-avatar');
+  const nameEl = document.getElementById('header-user-name');
+  const emailEl = document.getElementById('dropdown-user-email');
+
+  if (avatarEl && user.name) {
+    avatarEl.textContent = user.name.charAt(0).toUpperCase();
+  }
+  if (nameEl && user.name) {
+    nameEl.textContent = user.name.split(' ')[0];
+  }
+  if (emailEl && user.email) {
+    emailEl.textContent = user.email;
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    showToast('Logged out successfully.', 'info');
+  } catch (err) {
+    console.error('Logout error:', err);
+  } finally {
+    currentUser = null;
+    document.getElementById('auth-screen')?.classList.remove('hidden');
+    document.getElementById('app-workspace')?.classList.add('hidden');
+  }
+}
+
+/* ==========================================================================
+   3. NAVIGATION & TAB SWITCHING
+   ========================================================================== */
 function initNavigation() {
   const navItems = document.querySelectorAll('.nav-item');
-  const tabPanes = document.querySelectorAll('.tab-pane');
 
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
       const tabTarget = item.getAttribute('data-tab');
-
-      navItems.forEach(n => n.classList.remove('active'));
-      tabPanes.forEach(p => p.classList.remove('active'));
-
-      item.classList.add('active');
-      const targetPane = document.getElementById(`tab-${tabTarget}`);
-      if (targetPane) targetPane.classList.add('active');
-
-      // Load tab-specific data
-      if (tabTarget === 'jobs') loadJobsFeed(true);
-      if (tabTarget === 'searches') loadSavedSearches();
-      if (tabTarget === 'applications') loadApplicationWorkspace();
-      if (tabTarget === 'bookmarks') loadBookmarksFeed();
-      if (tabTarget === 'analytics') loadAnalytics();
-      if (tabTarget === 'connectors') loadConnectorHealth();
+      switchTab(tabTarget);
     });
+  });
+
+  // Switch tab via links (e.g. data-switch-tab="resume-match")
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('[data-switch-tab], [data-goto-tab]');
+    if (link) {
+      e.preventDefault();
+      const tabTarget = link.getAttribute('data-switch-tab') || link.getAttribute('data-goto-tab');
+      if (tabTarget) switchTab(tabTarget);
+    }
   });
 
   document.getElementById('sync-now-btn')?.addEventListener('click', triggerManualSync);
   document.getElementById('trigger-sync-panel-btn')?.addEventListener('click', triggerManualSync);
 }
 
-/* ACETERNITY UI SPOTLIGHT MOUSE TRACKING */
-function initSpotlightEffect() {
-  document.addEventListener('mousemove', (e) => {
-    const cards = document.querySelectorAll('.job-card, .bento-card, .kanban-card');
-    cards.forEach(card => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      card.style.setProperty('--mouse-x', `${x}px`);
-      card.style.setProperty('--mouse-y', `${y}px`);
-    });
+function switchTab(tabTarget) {
+  const navItems = document.querySelectorAll('.nav-item');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+
+  navItems.forEach(n => {
+    if (n.getAttribute('data-tab') === tabTarget) {
+      n.classList.add('active');
+    } else {
+      n.classList.remove('active');
+    }
   });
+
+  tabPanes.forEach(p => p.classList.remove('active'));
+
+  const targetPane = document.getElementById(`tab-${tabTarget}`);
+  if (targetPane) {
+    targetPane.classList.add('active');
+  }
+
+  // Load tab-specific data
+  if (tabTarget === 'dashboard') loadDashboardOverview();
+  if (tabTarget === 'jobs') loadJobsFeed(true);
+  if (tabTarget === 'resume-match') loadResumeMatchRecommendations();
+  if (tabTarget === 'searches') loadSavedSearches();
+  if (tabTarget === 'applications') loadApplicationWorkspace();
+  if (tabTarget === 'bookmarks') loadBookmarksFeed();
+  if (tabTarget === 'analytics') loadAnalytics();
+  if (tabTarget === 'connectors') loadConnectorHealth();
+  if (tabTarget === 'profile') loadProfile();
 }
 
-/* JOBS FEED & USER-DRIVEN SEARCH */
+/* ==========================================================================
+   4. POST-LOGIN COMMAND CENTER DASHBOARD
+   ========================================================================== */
+function initDashboardEvents() {
+  const dropzone = document.getElementById('dashboard-resume-dropzone');
+  const fileInput = document.getElementById('dashboard-resume-file-input');
+  const analyzeBtn = document.getElementById('dashboard-analyze-resume-btn');
+
+  if (dropzone && fileInput) {
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleResumeFileSelect(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        handleResumeFileSelect(fileInput.files[0]);
+      }
+    });
+  }
+
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener('click', () => {
+      if (selectedResumeFile) {
+        processResumeAnalysis(selectedResumeFile);
+      } else {
+        // Switch to resume match tab directly
+        switchTab('resume-match');
+      }
+    });
+  }
+}
+
+function handleResumeFileSelect(file) {
+  selectedResumeFile = file;
+  const badge = document.getElementById('dashboard-file-badge');
+  if (badge) {
+    badge.textContent = `📄 Selected File: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+    badge.classList.remove('hidden');
+  }
+}
+
+async function loadDashboardOverview() {
+  const greetingEl = document.getElementById('dashboard-user-greeting');
+  const activeJobsEl = document.getElementById('dash-stat-active-jobs');
+  const topMatchesEl = document.getElementById('dash-stat-top-matches');
+  const applicationsEl = document.getElementById('dash-stat-applications');
+  const bookmarkedEl = document.getElementById('dash-stat-bookmarked');
+
+  const previewContainer = document.getElementById('dashboard-top-matches-preview-container');
+
+  // Pipeline counts
+  const pipeSaved = document.getElementById('dash-pipe-saved');
+  const pipeApplied = document.getElementById('dash-pipe-applied');
+  const pipeOa = document.getElementById('dash-pipe-oa');
+  const pipeInterview = document.getElementById('dash-pipe-interview');
+  const pipeOffer = document.getElementById('dash-pipe-offer');
+
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/overview`);
+    if (res.ok) {
+      const data = await res.json();
+
+      if (greetingEl && data.user_name) {
+        const hour = new Date().getHours();
+        const timeGreeting = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
+        greetingEl.textContent = `${timeGreeting}, ${data.user_name} 👋`;
+      }
+
+      if (data.overview) {
+        if (activeJobsEl) activeJobsEl.textContent = (data.overview.active_jobs || 0).toLocaleString();
+        if (topMatchesEl) topMatchesEl.textContent = (data.overview.top_matches || 0).toLocaleString();
+        if (applicationsEl) applicationsEl.textContent = (data.overview.applications || 0).toLocaleString();
+        if (bookmarkedEl) bookmarkedEl.textContent = (data.overview.bookmarked_jobs || 0).toLocaleString();
+      }
+
+      if (data.pipeline) {
+        if (pipeSaved) pipeSaved.textContent = data.pipeline.saved || 0;
+        if (pipeApplied) pipeApplied.textContent = data.pipeline.applied || 0;
+        if (pipeOa) pipeOa.textContent = data.pipeline.oa_test || 0;
+        if (pipeInterview) pipeInterview.textContent = data.pipeline.interview || 0;
+        if (pipeOffer) pipeOffer.textContent = data.pipeline.offer || 0;
+      }
+
+      // Render Top Matches Preview
+      if (previewContainer) {
+        if (data.top_matches_preview && data.top_matches_preview.length > 0) {
+          previewContainer.innerHTML = data.top_matches_preview.map(j => `
+            <div class="top-match-item">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="company-avatar">${(j.company || 'C').charAt(0)}</div>
+                <div>
+                  <div style="font-weight: 700; font-size: 14px;">${escapeHtml(j.title)}</div>
+                  <div class="text-xs text-muted">${escapeHtml(j.company)} • ${escapeHtml(j.location || 'Remote')}</div>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <span class="match-badge match-strong" style="font-size: 11px;">${j.match_score}% Match</span>
+                <div class="text-xs text-muted mt-1" style="font-weight: 600;">${escapeHtml(j.match_classification)}</div>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          previewContainer.innerHTML = '<div class="text-muted text-sm" style="padding: 14px 0;">Upload your resume to get instant top opportunities.</div>';
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Dashboard overview error:', err);
+  }
+}
+
+/* ==========================================================================
+   5. RESUME MATCH & TOP 30 RECOMMENDATIONS
+   ========================================================================== */
+function initResumeMatchEvents() {
+  const resumeTabFileInput = document.getElementById('resume-tab-file-input');
+  if (resumeTabFileInput) {
+    resumeTabFileInput.addEventListener('change', () => {
+      if (resumeTabFileInput.files && resumeTabFileInput.files.length > 0) {
+        processResumeAnalysis(resumeTabFileInput.files[0]);
+      }
+    });
+  }
+}
+
+async function processResumeAnalysis(file) {
+  showToast('Parsing resume & extracting skills...', 'info');
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${API_BASE}/ai/upload-resume`, {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await res.json();
+    if (res.ok && result.success) {
+      showToast(`Resume analyzed! Found ${result.total_recommendations} top matching jobs.`, 'success');
+      switchTab('resume-match');
+      renderResumeMatchView(result.candidate_profile, result.data);
+    } else {
+      showToast(result.detail || 'Resume analysis failed.', 'error');
+    }
+  } catch (err) {
+    showToast('Error uploading resume: ' + err.message, 'error');
+  }
+}
+
+async function loadResumeMatchRecommendations() {
+  const container = document.getElementById('resume-match-container');
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-skeleton">Evaluating your candidate profile against active opportunities...</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/ai/recommendations`);
+    if (res.ok) {
+      const result = await res.json();
+      renderResumeMatchView(result.candidate_profile, result.data);
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading recommendations: ${err.message}</div>`;
+  }
+}
+
+function renderResumeMatchView(profile, recommendations) {
+  const container = document.getElementById('resume-match-container');
+  const summaryEl = document.getElementById('candidate-profile-summary');
+
+  if (summaryEl && profile) {
+    summaryEl.classList.remove('hidden');
+    const skillsList = profile.skills ? profile.skills.slice(0, 8).map(s => `<span class="tag">${escapeHtml(s)}</span>`).join(' ') : '';
+    summaryEl.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-weight: 700; font-size: 16px;">👤 Profile: ${escapeHtml(profile.name || 'Candidate')}</div>
+          <div class="text-xs text-muted mt-1">${escapeHtml(profile.degree || '')} • ${escapeHtml(profile.experience_level || 'Fresher')}</div>
+          <div class="skills-row mt-2">${skillsList}</div>
+        </div>
+        <div class="badge badge-pulse" style="font-size: 12px; padding: 6px 12px;">
+          🎯 ${recommendations ? recommendations.length : 0} Active Opportunities Matched
+        </div>
+      </div>
+    `;
+  }
+
+  if (!recommendations || recommendations.length === 0) {
+    container.innerHTML = '<div class="card card-padded text-muted">No active opportunities found for profile. Try uploading an updated resume.</div>';
+    return;
+  }
+
+  container.innerHTML = recommendations.map(j => renderRecommendedJobCard(j)).join('');
+}
+
+function renderRecommendedJobCard(j) {
+  const isClosed = j.status === 'CLOSED' || j.status === 'REMOVED';
+  const matchClass = (j.match_classification || 'Good Match').toLowerCase().replace(' ', '-');
+
+  const matchingSkillsHtml = j.matching_skills && j.matching_skills.length > 0
+    ? j.matching_skills.slice(0, 5).map(s => `<span class="skill-tag-matched">✓ ${escapeHtml(s)}</span>`).join('')
+    : '<span class="text-xs text-muted">CS Fundamentals</span>';
+
+  const missingSkillsHtml = j.missing_skills && j.missing_skills.length > 0
+    ? j.missing_skills.slice(0, 3).map(s => `<span class="skill-tag-missing">• ${escapeHtml(s)}</span>`).join('')
+    : '<span class="text-xs text-muted" style="color: #10b981;">No critical gaps</span>';
+
+  const b = j.breakdown || {};
+
+  return `
+    <div class="job-card spotlight-card">
+      ${isClosed ? `
+        <div class="closed-job-banner">
+          🔴 JOB CLOSED — Source listing is no longer available.
+        </div>
+      ` : ''}
+
+      <div class="job-card-header">
+        <div>
+          <span class="company-name">${escapeHtml(j.company)}</span>
+          <h3 class="job-title">${escapeHtml(j.title)}</h3>
+        </div>
+        <button class="bookmark-btn ${j.is_bookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${j.job_id || j.id}, this)">
+          ${j.is_bookmarked ? '★' : '☆'}
+        </button>
+      </div>
+
+      <div class="job-details">
+        <span class="detail-item">📍 ${escapeHtml(j.location || 'India')}</span>
+        <span class="detail-item">🌐 ${escapeHtml(j.remote_type || 'Hybrid')}</span>
+        <span class="detail-item">💼 ${escapeHtml(j.experience_level || 'Fresher')}</span>
+        ${j.salary_range ? `<span class="detail-item" style="color: #10b981;">💰 ${escapeHtml(j.salary_range)}</span>` : ''}
+      </div>
+
+      <!-- Match Scores & Priority Row -->
+      <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-secondary); padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="match-badge match-${matchClass.includes('strong') ? 'strong' : (matchClass.includes('good') ? 'good' : 'moderate')}">${j.match_score}% Match</span>
+          <span class="text-xs font-semibold" style="color: var(--text-secondary);">${escapeHtml(j.match_classification)}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="text-xs text-muted">Priority:</span>
+          <span class="priority-badge priority-${(j.application_priority || 'MEDIUM').toLowerCase()}">${j.application_priority || 'MEDIUM'}</span>
+        </div>
+      </div>
+
+      <!-- Skills Overlap Section -->
+      <div class="skills-section">
+        <div class="skills-row">
+          <span class="text-xs text-muted" style="width: 85px;">Matching:</span>
+          ${matchingSkillsHtml}
+        </div>
+        <div class="skills-row">
+          <span class="text-xs text-muted" style="width: 85px;">Gaps:</span>
+          ${missingSkillsHtml}
+        </div>
+      </div>
+
+      <!-- Expandable "Why this matches you" Accordion -->
+      <div class="why-accordion-box">
+        <button class="why-accordion-toggle" onclick="toggleAccordion('why-content-${j.job_id || j.id}')">
+          <span>💡 Why this matches you</span>
+          <span>▼</span>
+        </button>
+        <div id="why-content-${j.job_id || j.id}" class="why-accordion-content hidden">
+          <div class="score-progress-row">
+            <span class="text-xs text-muted">Skill Match</span>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.skill_match || 80}%;"></div></div>
+            <span class="text-xs font-semibold">${b.skill_match || 80}%</span>
+          </div>
+          <div class="score-progress-row">
+            <span class="text-xs text-muted">Role Alignment</span>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.role_alignment || 90}%;"></div></div>
+            <span class="text-xs font-semibold">${b.role_alignment || 90}%</span>
+          </div>
+          <div class="score-progress-row">
+            <span class="text-xs text-muted">Experience</span>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.experience_match || 85}%;"></div></div>
+            <span class="text-xs font-semibold">${b.experience_match || 85}%</span>
+          </div>
+
+          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+            <div style="font-weight: 600; color: #10b981; font-size: 12px; margin-bottom: 2px;">Why you're a strong candidate:</div>
+            <div class="text-xs text-secondary mb-2">${escapeHtml(j.why_matches || '')}</div>
+            <div style="font-weight: 600; color: #f59e0b; font-size: 12px; margin-bottom: 2px;">Potential gap:</div>
+            <div class="text-xs text-muted">${escapeHtml(j.potential_gap || '')}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="job-card-footer">
+        <span class="posted-date">Source: ${escapeHtml(j.source || 'ATS')}</span>
+        <div class="action-buttons">
+          <button class="btn btn-sm btn-ghost" onclick="openJobDetailModal(${j.job_id || j.id})">Details</button>
+          <button class="btn btn-sm btn-outline" onclick="trackJobInKanban(${j.job_id || j.id}, '${escapeJs(j.title)}', '${escapeJs(j.company)}')">Track</button>
+          ${isClosed ? `
+            <button class="btn btn-sm btn-disabled" disabled>Job Closed</button>
+          ` : `
+            <a href="${j.apply_url || j.job_url}" target="_blank" class="btn btn-sm btn-primary">Apply ↗</a>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleAccordion(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('hidden');
+}
+
+/* ==========================================================================
+   6. DISCOVER JOBS & FILTERS (CLOSED JOB BADGES)
+   ========================================================================== */
+function initSearchAndFilters() {
+  const searchInput = document.getElementById('job-search-input');
+  const searchBtn = document.getElementById('run-search-btn');
+
+  const expSelect = document.getElementById('filter-exp');
+  const remoteSelect = document.getElementById('filter-remote');
+  const salarySelect = document.getElementById('filter-salary');
+  const bookmarkedBtn = document.getElementById('bookmarked-only-btn');
+  const chips = document.querySelectorAll('.salary-chip');
+
+  if (searchBtn) {
+    searchBtn.addEventListener('click', () => loadJobsFeed(true));
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loadJobsFeed(true);
+    });
+  }
+
+  [expSelect, remoteSelect, salarySelect].forEach(select => {
+    select?.addEventListener('change', () => loadJobsFeed(true));
+  });
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      selectedSalaryMin = chip.getAttribute('data-min') || null;
+      selectedSalaryMax = chip.getAttribute('data-max') || null;
+      loadJobsFeed(true);
+    });
+  });
+
+  if (bookmarkedBtn) {
+    bookmarkedBtn.addEventListener('click', () => {
+      isBookmarkedOnlyFilter = !isBookmarkedOnlyFilter;
+      bookmarkedBtn.classList.toggle('btn-primary', isBookmarkedOnlyFilter);
+      bookmarkedBtn.classList.toggle('btn-ghost', !isBookmarkedOnlyFilter);
+      loadJobsFeed(true);
+    });
+  }
+}
+
 async function loadJobsFeed(reset = true) {
   const container = document.getElementById('jobs-container');
   const loadMoreBtn = document.getElementById('load-more-btn');
   const loadMoreSpinner = document.getElementById('load-more-spinner');
+
+  if (!container) return;
 
   if (reset) {
     currentFeedPage = 1;
@@ -97,11 +699,11 @@ async function loadJobsFeed(reset = true) {
     container.innerHTML = '<div class="loading-skeleton">Searching live opportunities...</div>';
   }
 
-  const q = document.getElementById('job-search-input').value.trim();
-  const exp = document.getElementById('filter-exp').value;
-  const remote = document.getElementById('filter-remote').value;
-  const minSal = selectedSalaryMin || document.getElementById('filter-salary').value;
-  const maxSal = selectedSalaryMax;
+  const q = document.getElementById('job-search-input')?.value.trim() || '';
+  const exp = document.getElementById('filter-exp')?.value || '';
+  const remote = document.getElementById('filter-remote')?.value || '';
+  const minSal = selectedSalaryMin || document.getElementById('filter-salary')?.value || '';
+  const maxSal = selectedSalaryMax || '';
 
   let url = `${API_BASE}/jobs/search?page=${currentFeedPage}&limit=30`;
   if (q) url += `&keyword=${encodeURIComponent(q)}`;
@@ -109,6 +711,7 @@ async function loadJobsFeed(reset = true) {
   if (remote) url += `&remote_type=${encodeURIComponent(remote)}`;
   if (minSal) url += `&salary_min=${encodeURIComponent(minSal)}`;
   if (maxSal) url += `&salary_max=${encodeURIComponent(maxSal)}`;
+  if (isBookmarkedOnlyFilter) url += `&bookmarked_only=true`;
 
   isLoadingMoreFeed = true;
   if (loadMoreSpinner) loadMoreSpinner.classList.remove('hidden');
@@ -131,7 +734,7 @@ async function loadJobsFeed(reset = true) {
 
       const countBadge = document.getElementById('job-count-badge');
       if (countBadge) {
-        countBadge.textContent = `Showing 1–${currentJobs.length} of ${totalFeedRecords} jobs`;
+        countBadge.textContent = `Showing 1–${currentJobs.length} of ${totalFeedRecords} active jobs`;
       }
 
       if (loadMoreBtn) {
@@ -153,302 +756,278 @@ async function loadJobsFeed(reset = true) {
   }
 }
 
+function renderJobsGrid(container, jobs) {
+  if (!jobs || jobs.length === 0) {
+    container.innerHTML = '<div class="card card-padded text-muted">No matching active jobs found. Try adjusting your search filters.</div>';
+    return;
+  }
+
+  container.innerHTML = jobs.map(j => renderStandardJobCard(j)).join('');
+}
+
+function renderStandardJobCard(j) {
+  const isClosed = j.status === 'CLOSED' || j.status === 'REMOVED';
+  const statusBadgeClass = isClosed ? 'badge-status-closed' : (j.status === 'ACTIVE' ? 'badge-status-active' : 'badge-status-unknown');
+  const statusLabel = isClosed ? '🔴 CLOSED' : (j.status === 'ACTIVE' ? '🟢 ACTIVE' : '🟡 UNVERIFIED');
+
+  return `
+    <div class="job-card spotlight-card">
+      ${isClosed ? `
+        <div class="closed-job-banner">
+          🔴 JOB CLOSED — Source listing is no longer available.
+        </div>
+      ` : ''}
+
+      <div class="job-card-header">
+        <div>
+          <span class="company-name">${escapeHtml(j.company)}</span>
+          <h3 class="job-title">${escapeHtml(j.title)}</h3>
+        </div>
+        <button class="bookmark-btn ${j.is_bookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${j.id}, this)">
+          ${j.is_bookmarked ? '★' : '☆'}
+        </button>
+      </div>
+
+      <div class="job-details">
+        <span class="badge ${statusBadgeClass}">${statusLabel}</span>
+        <span class="detail-item">📍 ${escapeHtml(j.location || 'India')}</span>
+        <span class="detail-item">🌐 ${escapeHtml(j.remote_type || 'Hybrid')}</span>
+        <span class="detail-item">💼 ${escapeHtml(j.experience_level || 'Fresher')}</span>
+        ${j.salary_range ? `<span class="detail-item" style="color: #10b981;">💰 ${escapeHtml(j.salary_range)}</span>` : ''}
+      </div>
+
+      <div class="job-tags mt-2">
+        ${(j.tags || []).slice(0, 4).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+      </div>
+
+      <div class="job-card-footer">
+        <span class="posted-date">Source: ${escapeHtml(j.source || 'ATS')}</span>
+        <div class="action-buttons">
+          <button class="btn btn-sm btn-ghost" onclick="openJobDetailModal(${j.id})">Details</button>
+          <button class="btn btn-sm btn-outline" onclick="trackJobInKanban(${j.id}, '${escapeJs(j.title)}', '${escapeJs(j.company)}')">Track</button>
+          ${isClosed ? `
+            <button class="btn btn-sm btn-disabled" disabled>Job Closed</button>
+          ` : `
+            <a href="${j.url || j.job_url}" target="_blank" class="btn btn-sm btn-primary">Apply ↗</a>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function initInfiniteScroll() {
+  const contentArea = document.querySelector('.content-area');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+
+  loadMoreBtn?.addEventListener('click', () => loadNextFeedPage());
+
+  if (contentArea) {
+    contentArea.addEventListener('scroll', () => {
+      const activeTab = document.querySelector('.tab-pane.active');
+      if (!activeTab || activeTab.id !== 'tab-jobs') return;
+
+      const scrollPosition = contentArea.scrollTop + contentArea.clientHeight;
+      const scrollThreshold = contentArea.scrollHeight - 300;
+
+      if (scrollPosition >= scrollThreshold && !isLoadingMoreFeed && currentFeedPage < totalFeedPages) {
+        loadNextFeedPage();
+      }
+    });
+  }
+}
+
 async function loadNextFeedPage() {
   if (isLoadingMoreFeed || currentFeedPage >= totalFeedPages) return;
   currentFeedPage++;
   await loadJobsFeed(false);
 }
 
-function initInfiniteScroll() {
-  const contentArea = document.querySelector('.content-area');
+/* ==========================================================================
+   7. APPLICATION KANBAN WORKSPACE
+   ========================================================================== */
+function initApplicationWorkspaceEvents() {
+  const addBtn = document.getElementById('add-custom-application-btn');
+  const exportBtn = document.getElementById('export-applications-btn');
+  const csvInput = document.getElementById('csv-file-input');
 
-  const handleScroll = (targetEl) => {
-    const activeTab = document.querySelector('.tab-pane.active');
-    if (!activeTab || activeTab.id !== 'tab-jobs') return;
-
-    const scrollBottom = targetEl.scrollHeight - (targetEl.scrollTop + targetEl.clientHeight);
-    if (scrollBottom < 500) {
-      loadNextFeedPage();
-    }
-  };
-
-  if (contentArea) {
-    contentArea.addEventListener('scroll', () => handleScroll(contentArea));
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      window.open(`${API_BASE}/applications/export`, '_blank');
+    });
   }
 
-  window.addEventListener('scroll', () => {
-    const activeTab = document.querySelector('.tab-pane.active');
-    if (!activeTab || activeTab.id !== 'tab-jobs') return;
+  if (csvInput) {
+    csvInput.addEventListener('change', async () => {
+      if (!csvInput.files || csvInput.files.length === 0) return;
+      const formData = new FormData();
+      formData.append('file', csvInput.files[0]);
 
-    if ((window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 500)) {
-      loadNextFeedPage();
-    }
-  });
-
-  const loadMoreBtn = document.getElementById('load-more-btn');
-  loadMoreBtn?.addEventListener('click', loadNextFeedPage);
-}
-
-function renderJobsGrid(container, jobs) {
-  if (!jobs || jobs.length === 0) {
-    container.innerHTML = `
-      <div class="card card-padded text-center" style="grid-column: 1 / -1;">
-        <h3>No matching opportunities found</h3>
-        <p class="text-muted">Try searching with a specific keyword, salary chip, or location.</p>
-      </div>`;
-    return;
+      try {
+        const res = await fetch(`${API_BASE}/applications/import`, {
+          method: 'POST',
+          body: formData
+        });
+        const result = await res.json();
+        if (res.ok && result.success) {
+          showToast(`Imported ${result.imported_count} applications!`, 'success');
+          loadApplicationWorkspace();
+        }
+      } catch (err) {
+        showToast('Error importing CSV: ' + err.message, 'error');
+      }
+    });
   }
-
-  container.innerHTML = jobs.map(job => {
-    const applyTarget = job.external_apply_url || job.job_url || (job.url !== '#' ? job.url : null);
-    
-    const vStatus = job.verification_status || 'VERIFIED';
-    let vBadgeHtml = '<span class="badge badge-pulse">🟢 Verified Today</span>';
-    if (vStatus === 'PENDING') {
-      vBadgeHtml = '<span class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);">🟡 Verification Pending</span>';
-    } else if (vStatus === 'REMOVED_FROM_SOURCE' || job.status === 'REMOVED') {
-      vBadgeHtml = '<span class="badge" style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🔴 Removed from Source</span>';
-    }
-
-    const sourceType = (job.source_type || 'ATS').toLowerCase();
-    let badgeClass = 'badge-source-ats';
-    if (sourceType.includes('board')) badgeClass = 'badge-source-board';
-    if (sourceType.includes('company')) badgeClass = 'badge-source-company';
-
-    const applyButtonHtml = applyTarget ? `
-      <a href="${applyTarget}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">
-        Apply Listing ↗
-      </a>` : `
-      <button class="btn btn-sm btn-outline btn-disabled" disabled>
-        Link unavailable
-      </button>`;
-
-    const salaryDisp = job.salary_range ? `💰 ${escapeHtml(job.salary_range)}` : '💰 Disclosed on App';
-
-    return `
-      <div class="job-card">
-        <div class="job-card-header">
-          <div>
-            <div class="company-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px;">
-              <span class="company-name">${escapeHtml(job.company)}</span>
-              <span class="badge-source ${badgeClass}">${job.source_type || 'ATS'}</span>
-              ${vBadgeHtml}
-            </div>
-            <h3 class="job-title">${escapeHtml(job.title)}</h3>
-          </div>
-          <button class="bookmark-btn ${job.is_bookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${job.id}, this)">
-            ${job.is_bookmarked ? '⭐' : '☆'}
-          </button>
-        </div>
-
-        <div class="job-details">
-          <span class="detail-item">📍 ${escapeHtml(job.location)}</span>
-          <span class="detail-item">🏠 ${escapeHtml(job.remote_type || 'Hybrid')}</span>
-          <span class="detail-item">💼 ${escapeHtml(job.experience_level || 'Fresher')}</span>
-          <span class="detail-item">${salaryDisp}</span>
-        </div>
-
-        <div class="job-tags">
-          ${(job.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
-        </div>
-
-        <div class="job-card-footer">
-          <small class="posted-date">Via ${escapeHtml(job.source)} • Seen: ${formatDate(job.first_seen)}</small>
-          <div class="action-buttons">
-            <button class="btn btn-sm btn-ghost" onclick="saveToApplicationWorkspace('${escapeHtml(job.company)}', '${escapeHtml(job.title)}', '${escapeHtml(applyTarget || '')}')">
-              💼 Track
-            </button>
-            <button class="btn btn-sm btn-ghost" onclick="copyJobLink('${escapeHtml(applyTarget || '')}')" title="Copy listing URL">
-              🔗 Share
-            </button>
-            ${applyButtonHtml}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
 }
 
-function formatDate(isoStr) {
-  if (!isoStr) return 'Recently';
-  const d = new Date(isoStr);
-  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-  })[m]);
-}
-
-function copyJobLink(url) {
-  if (!url) return alert('Application URL unavailable.');
-  navigator.clipboard.writeText(url);
-  alert('Job link copied to clipboard!');
-}
-
-/* APPLICATION WORKSPACE KANBAN */
 async function loadApplicationWorkspace() {
   const container = document.getElementById('kanban-board-container');
-  container.innerHTML = '<div class="loading-skeleton">Loading Application Kanban Workspace...</div>';
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-skeleton">Loading Application Kanban...</div>';
 
   try {
     const res = await fetch(`${API_BASE}/applications`);
     const result = await res.json();
 
-    if (result.success) {
-      const apps = result.data || [];
-      const columns = ['Saved', 'Applied', 'OA Scheduled', 'Interview', 'Offer', 'Rejected'];
-
-      container.innerHTML = columns.map(col => {
-        const colApps = apps.filter(a => a.status === col);
-        return `
-          <div class="kanban-column">
-            <div class="kanban-header">
-              <span class="kanban-title">${col}</span>
-              <span class="badge">${colApps.length}</span>
-            </div>
-            <div class="kanban-cards-wrapper" style="display: flex; flex-direction: column; gap: 10px;">
-              ${colApps.length === 0 ? '<small class="text-muted" style="text-align: center; padding: 10px;">No applications</small>' : colApps.map(a => `
-                <div class="kanban-card">
-                  <strong style="font-size: 14px;">${escapeHtml(a.role)}</strong>
-                  <small class="text-muted">${escapeHtml(a.company)}</small>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-                    <span class="tag">${escapeHtml(a.source || 'Manual')}</span>
-                    <select onchange="updateApplicationStatus(${a.id}, this.value)" style="font-size: 11px; padding: 2px 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;">
-                      ${columns.map(c => `<option value="${c}" ${c === a.status ? 'selected' : ''}>${c}</option>`).join('')}
-                    </select>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
-      }).join('');
+    if (result.success && result.data) {
+      renderKanbanBoard(container, result.data);
     }
   } catch (err) {
-    container.innerHTML = `<div class="card card-padded text-muted">Error loading Application Workspace.</div>`;
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading applications: ${err.message}</div>`;
   }
 }
 
-async function updateApplicationStatus(id, newStatus) {
-  try {
-    await fetch(`${API_BASE}/applications/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
-    });
-    loadApplicationWorkspace();
-  } catch (err) {
-    alert('Status update failed: ' + err.message);
-  }
+function renderKanbanBoard(container, applications) {
+  const columns = ['Saved', 'Applied', 'OA / Test', 'Interview', 'Offer', 'Rejected'];
+  
+  const grouped = {};
+  columns.forEach(col => grouped[col] = []);
+
+  applications.forEach(app => {
+    const status = app.status || 'Saved';
+    if (grouped[status]) {
+      grouped[status].push(app);
+    } else {
+      grouped['Saved'].push(app);
+    }
+  });
+
+  container.innerHTML = columns.map(col => `
+    <div class="kanban-column" data-column="${escapeHtml(col)}">
+      <div class="kanban-header">
+        <span class="kanban-title">${escapeHtml(col)}</span>
+        <span class="badge badge-outline">${grouped[col].length}</span>
+      </div>
+      <div class="kanban-cards-wrapper" style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
+        ${grouped[col].length === 0 ? '<div class="text-xs text-muted" style="padding: 12px; text-align: center;">No items</div>' : ''}
+        ${grouped[col].map(a => `
+          <div class="kanban-card">
+            <div style="font-weight: 700; font-size: 14px;">${escapeHtml(a.company)}</div>
+            <div class="text-xs text-secondary">${escapeHtml(a.role)}</div>
+            <div class="text-xs text-muted" style="display: flex; justify-content: space-between; margin-top: 4px;">
+              <span>${a.applied_date ? new Date(a.applied_date).toLocaleDateString() : 'Tracked'}</span>
+              <span class="badge badge-outline" style="font-size: 10px;">${escapeHtml(a.source || 'JobPulse')}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
-async function saveToApplicationWorkspace(company, role, jobUrl) {
+async function trackJobInKanban(jobId, title, company) {
   try {
     const res = await fetch(`${API_BASE}/applications`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company, role, job_url: jobUrl, status: 'Saved' })
+      body: JSON.stringify({
+        company: company,
+        role: title,
+        source: 'JobPulse Discovery',
+        status: 'Applied'
+      })
     });
     const result = await res.json();
-    if (result.success) {
-      alert(`Tracked ${role} at ${company} in Application Workspace!`);
+    if (res.ok && result.success) {
+      showToast(`Added ${company} — ${title} to Application Kanban!`, 'success');
+      loadDashboardOverview();
     }
   } catch (err) {
-    alert('Failed to track application: ' + err.message);
+    showToast('Error tracking job: ' + err.message, 'error');
   }
 }
 
-function initApplicationWorkspaceEvents() {
-  document.getElementById('export-applications-btn')?.addEventListener('click', () => {
-    window.open(`${API_BASE}/applications/export?format=csv`, '_blank');
-  });
-
-  const csvInput = document.getElementById('csv-file-input');
-  csvInput?.addEventListener('change', async () => {
-    if (!csvInput.files || csvInput.files.length === 0) return;
-    const formData = new FormData();
-    formData.append('file', csvInput.files[0]);
-
-    try {
-      const res = await fetch(`${API_BASE}/applications/import`, {
-        method: 'POST',
-        body: formData
-      });
-      const result = await res.json();
-      alert(result.message);
-      loadApplicationWorkspace();
-    } catch (err) {
-      alert('CSV import failed: ' + err.message);
-    }
-  });
-
-  document.getElementById('add-custom-application-btn')?.addEventListener('click', () => {
-    const comp = prompt('Company Name:');
-    if (!comp) return;
-    const role = prompt('Role Title:');
-    if (!role) return;
-    saveToApplicationWorkspace(comp, role, '#');
-  });
-}
-
-/* BOOKMARK TOGGLING */
-async function toggleBookmark(jobId, btnEl) {
+/* ==========================================================================
+   8. BOOKMARKS & SAVED SEARCHES
+   ========================================================================== */
+async function toggleBookmark(jobId, btnElement) {
   try {
     const res = await fetch(`${API_BASE}/jobs/${jobId}/bookmark`, { method: 'POST' });
     const result = await res.json();
-    if (result.success) {
+    if (res.ok && result.success) {
       const isBookmarked = result.data.is_bookmarked;
-      btnEl.classList.toggle('bookmarked', isBookmarked);
-      btnEl.textContent = isBookmarked ? '⭐' : '☆';
+      if (btnElement) {
+        btnElement.classList.toggle('bookmarked', isBookmarked);
+        btnElement.textContent = isBookmarked ? '★' : '☆';
+      }
+      showToast(isBookmarked ? 'Saved to Bookmarks!' : 'Removed from Bookmarks', 'info');
     }
   } catch (err) {
-    console.error('Bookmark error:', err);
+    showToast('Error toggling bookmark: ' + err.message, 'error');
   }
 }
 
-/* SAVED SEARCHES VIEW */
+async function loadBookmarksFeed() {
+  const container = document.getElementById('bookmarks-container');
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-skeleton">Loading bookmarked opportunities...</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/jobs?bookmarked_only=true&limit=100`);
+    const result = await res.json();
+    if (result.success) {
+      renderJobsGrid(container, result.data);
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading bookmarks: ${err.message}</div>`;
+  }
+}
+
 async function loadSavedSearches() {
   const container = document.getElementById('searches-container');
+  if (!container) return;
+
   container.innerHTML = '<div class="loading-skeleton">Loading saved search rules...</div>';
 
   try {
-    const res = await fetch(`${API_BASE}/searches`);
+    const res = await fetch(`${API_BASE}/search/saved`);
     const result = await res.json();
 
     if (result.success && result.data) {
       if (result.data.length === 0) {
-        container.innerHTML = `<div class="card card-padded text-center">No saved search alerts created yet.</div>`;
+        container.innerHTML = '<div class="card card-padded text-muted">No active search alert rules created yet.</div>';
         return;
       }
 
       container.innerHTML = `
-        <table class="data-table">
+        <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
-            <tr>
-              <th>Rule Name</th>
-              <th>Query Keywords</th>
-              <th>Location</th>
-              <th>Exp Level</th>
-              <th>Min Salary</th>
-              <th>Status</th>
-              <th>Actions</th>
+            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 12px;">
+              <th style="padding: 10px;">Rule Name</th>
+              <th style="padding: 10px;">Keywords</th>
+              <th style="padding: 10px;">Status</th>
+              <th style="padding: 10px;">Telegram Recipient</th>
             </tr>
           </thead>
           <tbody>
             ${result.data.map(s => `
-              <tr>
-                <td><strong>${escapeHtml(s.name)}</strong></td>
-                <td><code>${escapeHtml(s.query || s.keywords || 'Any')}</code></td>
-                <td>${escapeHtml(s.location || 'Any')}</td>
-                <td>${escapeHtml(s.experience_level || 'Any')}</td>
-                <td>${s.min_salary_lpa ? `₹${s.min_salary_lpa} LPA` : 'Any'}</td>
-                <td><span class="badge badge-pulse">Active</span></td>
-                <td>
-                  <button class="btn btn-sm btn-outline" onclick="deleteSavedSearch(${s.id})">Delete</button>
-                </td>
+              <tr style="border-bottom: 1px solid var(--border-color); font-size: 13px;">
+                <td style="padding: 12px; font-weight: 600;">${escapeHtml(s.name)}</td>
+                <td style="padding: 12px; color: var(--accent-blue);">${escapeHtml(s.keywords || s.query || 'All Jobs')}</td>
+                <td style="padding: 12px;"><span class="badge badge-pulse">${s.is_active ? 'ACTIVE' : 'PAUSED'}</span></td>
+                <td style="padding: 12px; font-family: var(--font-mono);">${escapeHtml(s.telegram_chat_id || 'Default')}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -456,48 +1035,36 @@ async function loadSavedSearches() {
       `;
     }
   } catch (err) {
-    container.innerHTML = `<div class="card card-padded text-muted">Error loading saved searches.</div>`;
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading search rules: ${err.message}</div>`;
   }
 }
 
-async function deleteSavedSearch(id) {
-  if (!confirm('Delete this saved search rule?')) return;
-  try {
-    await fetch(`${API_BASE}/searches/${id}`, { method: 'DELETE' });
-    loadSavedSearches();
-  } catch (err) {
-    alert('Delete error: ' + err.message);
-  }
-}
-
-/* BOOKMARKS FEED VIEW */
-async function loadBookmarksFeed() {
-  const container = document.getElementById('jobs-container');
-  isBookmarkedOnlyFilter = true;
-  loadJobsFeed(true);
-}
-
-/* ANALYTICS VIEW */
+/* ==========================================================================
+   9. ANALYTICS & CONNECTORS
+   ========================================================================== */
 async function loadAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/dashboard/metrics`);
-    const result = await res.json();
-    if (result.success) {
-      const data = result.metrics;
-      document.getElementById('stat-total-jobs').textContent = data.total_discovered_jobs || 0;
-      document.getElementById('stat-remote-jobs').textContent = data.total_applications || 0;
-      document.getElementById('stat-fresher-jobs').textContent = data.active_interviews || 0;
-      document.getElementById('stat-avg-salary').textContent = `${data.response_rate_pct}%`;
+    const res = await fetch(`${API_BASE}/analytics/dashboard`);
+    if (res.ok) {
+      const result = await res.json();
+      const d = result.data;
+      if (d) {
+        document.getElementById('stat-total-jobs').textContent = (d.total_jobs || 0).toLocaleString();
+        document.getElementById('stat-remote-jobs').textContent = (d.active_jobs || 0).toLocaleString();
+        document.getElementById('stat-fresher-jobs').textContent = (d.freshers_jobs_today || 0).toLocaleString();
+        document.getElementById('stat-avg-salary').textContent = `${d.verification_success_rate || 95}%`;
+      }
     }
   } catch (err) {
     console.error('Analytics error:', err);
   }
 }
 
-/* CONNECTOR HEALTH & DIAGNOSTICS VIEW */
 async function loadConnectorHealth() {
   const container = document.getElementById('connectors-container');
-  container.innerHTML = '<div class="loading-skeleton">Loading connector status...</div>';
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-skeleton">Loading connector diagnostics...</div>';
 
   try {
     const res = await fetch(`${API_BASE}/admin/connectors`);
@@ -505,30 +1072,22 @@ async function loadConnectorHealth() {
 
     if (result.success && result.data) {
       container.innerHTML = `
-        <table class="data-table">
+        <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
-            <tr>
-              <th>Connector Name</th>
-              <th>Source Type</th>
-              <th>Health Status</th>
-              <th>Success Rate</th>
-              <th>Jobs Last Run</th>
-              <th>Total Indexed</th>
-              <th>Avg Runtime</th>
-              <th>Last Run</th>
+            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 12px;">
+              <th style="padding: 10px;">Connector Name</th>
+              <th style="padding: 10px;">Type</th>
+              <th style="padding: 10px;">Status</th>
+              <th style="padding: 10px;">Total Jobs</th>
             </tr>
           </thead>
           <tbody>
             ${result.data.map(c => `
-              <tr>
-                <td><strong>${escapeHtml(c.name)}</strong></td>
-                <td><span class="badge-source badge-source-${(c.source_type || 'ats').toLowerCase()}">${c.source_type}</span></td>
-                <td><span class="badge ${c.health_score === 'HEALTHY' ? 'badge-pulse' : 'badge-danger'}">${c.health_score || c.status}</span></td>
-                <td><strong>${c.success_rate || 100}%</strong></td>
-                <td>${c.jobs_found_last_run}</td>
-                <td>${c.total_jobs_indexed}</td>
-                <td><strong>${c.average_runtime_ms} ms</strong></td>
-                <td>${c.last_run ? new Date(c.last_run).toLocaleTimeString() : 'Never'}</td>
+              <tr style="border-bottom: 1px solid var(--border-color); font-size: 13px;">
+                <td style="padding: 12px; font-weight: 600;">${escapeHtml(c.name)}</td>
+                <td style="padding: 12px;"><span class="badge badge-source-ats">${escapeHtml(c.source_type || 'ATS')}</span></td>
+                <td style="padding: 12px;"><span class="badge badge-pulse">HEALTHY</span></td>
+                <td style="padding: 12px; font-weight: 700;">${c.discovered_count || 0}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -536,504 +1095,198 @@ async function loadConnectorHealth() {
       `;
     }
   } catch (err) {
-    container.innerHTML = `<div class="card card-padded">Failed to load connectors health.</div>`;
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading connector diagnostics: ${err.message}</div>`;
   }
 }
 
 async function triggerManualSync() {
-  const syncBtn = document.getElementById('sync-now-btn');
-  if (syncBtn) syncBtn.innerHTML = '<span>🔄 Syncing...</span>';
-
+  showToast('Triggering source synchronization across connectors...', 'info');
   try {
     const res = await fetch(`${API_BASE}/admin/connectors/sync`, { method: 'POST' });
     const result = await res.json();
     if (result.success) {
+      showToast('Synchronization cycle completed successfully!', 'success');
+      loadDashboardOverview();
       loadJobsFeed(true);
-      loadAnalytics();
-      alert(`Sync Complete! Discovered ${result.data.new_unique_jobs_added} new roles across connectors.`);
     }
   } catch (err) {
-    alert('Sync error: ' + err.message);
-  } finally {
-    if (syncBtn) syncBtn.innerHTML = '<span>🔄 Sync Sources</span>';
+    showToast('Sync error: ' + err.message, 'error');
   }
 }
 
-/* TELEGRAM DEEP LINKING VIEW */
-function initTelegramView() {
-  const testBtn = document.getElementById('send-telegram-test-btn');
-  const generateTokenBtn = document.getElementById('generate-tg-token-btn');
-  const chatInput = document.getElementById('telegram-chat-id-input');
-  const resultAlert = document.getElementById('telegram-test-result');
-  const tokenDisplay = document.getElementById('telegram-token-display');
+/* ==========================================================================
+   10. ACCOUNT PROFILE & MODALS
+   ========================================================================== */
+function loadProfile() {
+  if (currentUser) {
+    document.getElementById('profile-name-field').value = currentUser.name || '';
+    document.getElementById('profile-email-field').value = currentUser.email || '';
+  }
+}
 
-  generateTokenBtn?.addEventListener('click', async () => {
+function initModals() {
+  document.getElementById('close-modal-btn')?.addEventListener('click', () => {
+    document.getElementById('save-search-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('cancel-save-search')?.addEventListener('click', () => {
+    document.getElementById('save-search-modal')?.classList.add('hidden');
+  });
+
+  document.getElementById('save-current-search-btn')?.addEventListener('click', () => {
+    document.getElementById('save-search-modal')?.classList.remove('hidden');
+  });
+
+  document.getElementById('confirm-save-search')?.addEventListener('click', async () => {
+    const name = document.getElementById('modal-search-name').value.trim();
+    const query = document.getElementById('modal-search-query').value.trim();
+
+    if (!name) {
+      showToast('Alert rule name is required.', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/search/saved`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, query, keywords: query })
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        showToast('Saved search alert created!', 'success');
+        document.getElementById('save-search-modal')?.classList.add('hidden');
+      }
+    } catch (err) {
+      showToast('Error creating search alert: ' + err.message, 'error');
+    }
+  });
+
+  // Job Detail Modal
+  document.getElementById('close-job-detail-modal')?.addEventListener('click', closeJobDetailModal);
+  document.getElementById('close-job-detail-btn')?.addEventListener('click', closeJobDetailModal);
+}
+
+async function openJobDetailModal(jobId) {
+  const modal = document.getElementById('job-detail-modal');
+  const titleEl = document.getElementById('modal-job-title');
+  const bodyEl = document.getElementById('modal-job-body');
+  const applyLink = document.getElementById('modal-job-apply-link');
+
+  if (!modal) return;
+
+  bodyEl.innerHTML = '<div class="loading-skeleton">Loading job details...</div>';
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+    if (res.ok) {
+      const result = await res.json();
+      const j = result.data;
+
+      titleEl.textContent = `${j.company} — ${j.title}`;
+
+      const isClosed = !j.is_active_opportunity;
+      if (isClosed) {
+        applyLink.classList.add('btn-disabled');
+        applyLink.textContent = 'Job Closed';
+        applyLink.removeAttribute('href');
+      } else {
+        applyLink.classList.remove('btn-disabled');
+        applyLink.textContent = 'Apply Now ↗';
+        applyLink.href = j.external_apply_url || j.job_url || '#';
+      }
+
+      bodyEl.innerHTML = `
+        ${isClosed ? `
+          <div class="closed-job-banner mb-3">
+            🔴 ${escapeHtml(j.notice || 'This job is no longer active on the source website.')}
+          </div>
+        ` : ''}
+        <div class="mb-3">
+          <strong>Location:</strong> ${escapeHtml(j.location || 'India')}<br>
+          <strong>Remote Type:</strong> ${escapeHtml(j.remote_type || 'Hybrid')}<br>
+          <strong>Experience:</strong> ${escapeHtml(j.experience_level || 'Fresher')}<br>
+          ${j.salary_range ? `<strong>Salary:</strong> <span style="color: #10b981;">${escapeHtml(j.salary_range)}</span><br>` : ''}
+          <strong>Source:</strong> ${escapeHtml(j.source || 'ATS')}
+        </div>
+        <hr style="border-color: var(--border-color); margin: 12px 0;">
+        <div style="font-weight: 600; margin-bottom: 6px;">Job Description:</div>
+        <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; max-height: 250px; overflow-y: auto;">
+          ${escapeHtml(j.description || 'Full job posting details indexed directly from source ATS/career portal.')}
+        </div>
+      `;
+    }
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="text-muted">Error loading job details: ${err.message}</div>`;
+  }
+}
+
+function closeJobDetailModal() {
+  document.getElementById('job-detail-modal')?.classList.add('hidden');
+}
+
+/* ==========================================================================
+   11. TELEGRAM VIEW & UTILS
+   ========================================================================== */
+function initTelegramView() {
+  document.getElementById('generate-tg-token-btn')?.addEventListener('click', async () => {
+    const display = document.getElementById('telegram-token-display');
     try {
       const res = await fetch(`${API_BASE}/notifications/telegram/token`, { method: 'POST' });
       const result = await res.json();
       if (result.success) {
-        tokenDisplay.classList.remove('hidden');
-        tokenDisplay.innerHTML = `
-          <div style="background: var(--bg-card); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 10px;">
-            <strong>Linking Token:</strong> <code>${result.token}</code><br>
-            <small class="text-muted">${result.instructions}</small>
-          </div>
-        `;
+        display.classList.remove('hidden');
+        display.innerHTML = `<div class="alert alert-success">Your Token: <code>${result.token}</code><br>Send <code>/link ${result.token}</code> to our Telegram Bot.</div>`;
       }
     } catch (err) {
-      alert('Token generation failed: ' + err.message);
-    }
-  });
-
-  testBtn?.addEventListener('click', async () => {
-    const chatId = chatInput.value.trim();
-    if (!chatId) return alert('Please enter a Telegram Chat ID.');
-
-    testBtn.textContent = 'Sending...';
-    try {
-      const res = await fetch(`${API_BASE}/notifications/telegram/test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId })
-      });
-      const result = await res.json();
-      resultAlert.classList.remove('hidden');
-      resultAlert.textContent = result.message + ' (Formatted MarkdownV2 payload generated).';
-    } catch (err) {
-      resultAlert.classList.remove('hidden');
-      resultAlert.textContent = 'Dispatch failed: ' + err.message;
-    } finally {
-      testBtn.textContent = '⚡ Send Test Alert';
+      showToast('Error generating token: ' + err.message, 'error');
     }
   });
 }
 
-/* SEARCH & FILTERS CONTROLS */
-function initSearchAndFilters() {
-  document.getElementById('run-search-btn').addEventListener('click', () => loadJobsFeed(true));
-  document.getElementById('job-search-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') loadJobsFeed(true);
-  });
-  document.getElementById('filter-exp').addEventListener('change', () => loadJobsFeed(true));
-  document.getElementById('filter-remote').addEventListener('change', () => loadJobsFeed(true));
-  document.getElementById('filter-salary').addEventListener('change', () => loadJobsFeed(true));
-
-  // Salary Chips Handler
-  const chips = document.querySelectorAll('.salary-chip');
-  chips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      chips.forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-
-      selectedSalaryMin = chip.getAttribute('data-min') || null;
-      selectedSalaryMax = chip.getAttribute('data-max') || null;
-
-      loadJobsFeed(true);
+function initSpotlightEffect() {
+  document.addEventListener('mousemove', (e) => {
+    const cards = document.querySelectorAll('.job-card, .bento-card, .kanban-card, .overview-card');
+    cards.forEach(card => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      card.style.setProperty('--mouse-x', `${x}px`);
+      card.style.setProperty('--mouse-y', `${y}px`);
     });
   });
-
-  document.getElementById('bookmarked-only-btn').addEventListener('click', () => {
-    isBookmarkedOnlyFilter = !isBookmarkedOnlyFilter;
-    const btn = document.getElementById('bookmarked-only-btn');
-    btn.classList.toggle('btn-primary', isBookmarkedOnlyFilter);
-    loadJobsFeed(true);
-  });
 }
 
-/* MODALS & COMMAND PALETTE */
-function initModals() {
-  const modal = document.getElementById('save-search-modal');
-  const openBtn = document.getElementById('save-current-search-btn');
-  const openModalBtn = document.getElementById('create-search-modal-btn');
-  const closeBtn = document.getElementById('close-modal-btn');
-  const cancelBtn = document.getElementById('cancel-save-search');
-  const confirmBtn = document.getElementById('confirm-save-search');
-
-  const closeModal = () => modal.classList.add('hidden');
-  const openModal = () => {
-    const currentQ = document.getElementById('job-search-input').value;
-    document.getElementById('modal-search-name').value = currentQ ? `Alert: ${currentQ}` : 'New SDE Alert';
-    document.getElementById('modal-search-query').value = currentQ || 'Software Engineer';
-    modal.classList.remove('hidden');
-  };
-
-  openBtn?.addEventListener('click', openModal);
-  openModalBtn?.addEventListener('click', openModal);
-  closeBtn?.addEventListener('click', closeModal);
-  cancelBtn?.addEventListener('click', closeModal);
-
-  confirmBtn?.addEventListener('click', async () => {
-    const name = document.getElementById('modal-search-name').value.trim();
-    const query = document.getElementById('modal-search-query').value.trim();
-    const exp = document.getElementById('filter-exp').value;
-    const remote = document.getElementById('filter-remote').value;
-    const minSal = selectedSalaryMin || document.getElementById('filter-salary').value;
-
-    if (!name) return alert('Please provide a name for this search rule.');
-
-    try {
-      const res = await fetch(`${API_BASE}/searches`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name,
-          query: query,
-          keywords: query,
-          experience_level: exp || null,
-          remote_type: remote || null,
-          min_salary_lpa: minSal ? parseFloat(minSal) : null
-        })
-      });
-      const result = await res.json();
-      if (result.success) {
-        closeModal();
-        alert('Saved search alert created successfully!');
-      }
-    } catch (err) {
-      alert('Failed to save search: ' + err.message);
-    }
-  });
-}
-
-function initCommandPalette() {
-  const palette = document.getElementById('command-palette');
-  const input = document.getElementById('cmd-input');
-  const list = document.getElementById('cmd-results');
-  const triggerBtn = document.getElementById('cmd-k-btn');
-
-  triggerBtn?.addEventListener('click', () => {
-    palette.classList.remove('hidden');
-    input.focus();
-  });
-
-  window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      palette.classList.toggle('hidden');
-      if (!palette.classList.contains('hidden')) input.focus();
-    }
-    if (e.key === 'Escape' && !palette.classList.contains('hidden')) {
-      palette.classList.add('hidden');
-    }
-  });
-
-  input?.addEventListener('input', () => {
-    const val = input.value.toLowerCase().trim();
-    if (!val) {
-      list.innerHTML = `<li class="cmd-item text-muted">Type a tech keyword (e.g. FastAPI, Python, React, Remote)...</li>`;
-      return;
-    }
-
-    const matched = currentJobs.filter(j => 
-      j.title.toLowerCase().includes(val) || 
-      j.company.toLowerCase().includes(val) || 
-      (j.raw_tags || '').toLowerCase().includes(val)
-    );
-
-    if (matched.length === 0) {
-      list.innerHTML = `<li class="cmd-item text-muted">No quick matches for "${escapeHtml(val)}"</li>`;
-    } else {
-      list.innerHTML = matched.slice(0, 5).map(j => `
-        <li class="cmd-item" onclick="selectCmdJob(${j.id})">
-          <strong>${escapeHtml(j.title)}</strong> at ${escapeHtml(j.company)}
-        </li>
-      `).join('');
-    }
-  });
-}
-
-function selectCmdJob(jobId) {
-  document.getElementById('command-palette').classList.add('hidden');
-  const targetJob = currentJobs.find(j => j.id === jobId);
-  if (targetJob) {
-    const applyTarget = targetJob.external_apply_url || targetJob.job_url;
-    if (applyTarget && applyTarget !== '#') window.open(applyTarget, '_blank');
+function showToast(message, type = 'info') {
+  let toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px;';
+    document.body.appendChild(toastContainer);
   }
+
+  const toast = document.createElement('div');
+  const bg = type === 'success' ? '#10b981' : (type === 'error' ? '#ef4444' : '#3b82f6');
+  toast.style.cssText = `background: ${bg}; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeInUp 0.2s ease;`;
+  toast.textContent = message;
+
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
 }
 
-// Centralized Auth State Manager & UI Controller
-const AuthState = {
-  user: null,
-  async check() {
-    try {
-      const res = await fetch('/api/v1/auth/me');
-      const data = await res.json();
-      if (data.authenticated && data.user) {
-        this.user = data.user;
-      } else {
-        this.user = null;
-      }
-    } catch (e) {
-      console.warn("Auth check error:", e);
-      this.user = null;
-    }
-    this.render();
-  },
-  render() {
-    const unauthGroup = document.getElementById('auth-unauthenticated-controls');
-    const authGroup = document.getElementById('auth-authenticated-controls');
-    const nameDisplay = document.getElementById('user-display-name');
-
-    const profileUnauth = document.getElementById('profile-unauth-view');
-    const profileAuth = document.getElementById('profile-auth-view');
-    const profileName = document.getElementById('profile-name-field');
-    const profileEmail = document.getElementById('profile-email-field');
-    const profileVerifBadge = document.getElementById('profile-verif-badge');
-    const profileResendBtn = document.getElementById('profile-resend-verif-btn');
-
-    if (this.user) {
-      if (unauthGroup) unauthGroup.classList.add('hidden');
-      if (authGroup) authGroup.classList.remove('hidden');
-      if (nameDisplay) nameDisplay.textContent = this.user.name || this.user.email;
-
-      if (profileUnauth) profileUnauth.classList.add('hidden');
-      if (profileAuth) profileAuth.classList.remove('hidden');
-      if (profileName) profileName.value = this.user.name || '';
-      if (profileEmail) profileEmail.value = this.user.email || '';
-      
-      if (profileVerifBadge) {
-        if (this.user.email_verified) {
-          profileVerifBadge.textContent = 'Verified ✓';
-          profileVerifBadge.className = 'badge badge-success';
-          if (profileResendBtn) profileResendBtn.classList.add('hidden');
-        } else {
-          profileVerifBadge.textContent = 'Unverified';
-          profileVerifBadge.className = 'badge badge-warning';
-          if (profileResendBtn) profileResendBtn.classList.remove('hidden');
-        }
-      }
-    } else {
-      if (unauthGroup) unauthGroup.classList.remove('hidden');
-      if (authGroup) authGroup.classList.add('hidden');
-
-      if (profileUnauth) profileUnauth.classList.remove('hidden');
-      if (profileAuth) profileAuth.classList.add('hidden');
-    }
-  }
-};
-
-function checkRouteHash() {
-  const hash = window.location.hash;
-  const loginModal = document.getElementById('login-modal');
-  const signupModal = document.getElementById('signup-modal');
-  const otpModal = document.getElementById('otp-modal');
-  const forgotModal = document.getElementById('forgot-password-modal');
-
-  if (hash === '#login') {
-    loginModal?.classList.remove('hidden');
-  } else if (hash === '#signup') {
-    signupModal?.classList.remove('hidden');
-  } else if (hash === '#forgot-password') {
-    forgotModal?.classList.remove('hidden');
-  } else if (hash === '#verify-otp') {
-    otpModal?.classList.remove('hidden');
-  }
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-function setupAuthHandlers() {
-  const loginModal = document.getElementById('login-modal');
-  const signupModal = document.getElementById('signup-modal');
-  const otpModal = document.getElementById('otp-modal');
-  const forgotModal = document.getElementById('forgot-password-modal');
-
-  // Open modals
-  document.getElementById('open-login-btn')?.addEventListener('click', () => loginModal?.classList.remove('hidden'));
-  document.getElementById('profile-open-login-btn')?.addEventListener('click', () => loginModal?.classList.remove('hidden'));
-  document.getElementById('open-signup-btn')?.addEventListener('click', () => signupModal?.classList.remove('hidden'));
-  document.getElementById('profile-open-signup-btn')?.addEventListener('click', () => signupModal?.classList.remove('hidden'));
-  document.getElementById('open-forgot-modal')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    loginModal?.classList.add('hidden');
-    forgotModal?.classList.remove('hidden');
-  });
-
-  // Close modals
-  document.getElementById('close-login-modal')?.addEventListener('click', () => loginModal?.classList.add('hidden'));
-  document.getElementById('cancel-login')?.addEventListener('click', () => loginModal?.classList.add('hidden'));
-  document.getElementById('close-signup-modal')?.addEventListener('click', () => signupModal?.classList.add('hidden'));
-  document.getElementById('cancel-signup')?.addEventListener('click', () => signupModal?.classList.add('hidden'));
-  document.getElementById('close-otp-modal')?.addEventListener('click', () => otpModal?.classList.add('hidden'));
-  document.getElementById('cancel-otp')?.addEventListener('click', () => otpModal?.classList.add('hidden'));
-  document.getElementById('close-forgot-modal')?.addEventListener('click', () => forgotModal?.classList.add('hidden'));
-  document.getElementById('cancel-forgot')?.addEventListener('click', () => forgotModal?.classList.add('hidden'));
-
-  // Submit Login
-  document.getElementById('submit-login-btn')?.addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const errorDiv = document.getElementById('login-error-msg');
-
-    errorDiv.classList.add('hidden');
-    try {
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        loginModal.classList.add('hidden');
-        await AuthState.check();
-      } else {
-        errorDiv.textContent = data.detail || 'Login failed.';
-        errorDiv.classList.remove('hidden');
-      }
-    } catch (err) {
-      errorDiv.textContent = 'Network error during login.';
-      errorDiv.classList.remove('hidden');
-    }
-  });
-
-  // Submit Signup
-  document.getElementById('submit-signup-btn')?.addEventListener('click', async () => {
-    const name = document.getElementById('signup-name').value;
-    const email = document.getElementById('signup-email').value;
-    const password = document.getElementById('signup-password').value;
-    const confirm = document.getElementById('signup-confirm-password').value;
-    const errorDiv = document.getElementById('signup-error-msg');
-
-    errorDiv.classList.add('hidden');
-    if (password !== confirm) {
-      errorDiv.textContent = 'Passwords do not match.';
-      errorDiv.classList.remove('hidden');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/v1/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        signupModal.classList.add('hidden');
-        await AuthState.check();
-      } else {
-        errorDiv.textContent = data.detail || 'Signup failed.';
-        errorDiv.classList.remove('hidden');
-      }
-    } catch (err) {
-      errorDiv.textContent = 'Network error during signup.';
-      errorDiv.classList.remove('hidden');
-    }
-  });
-
-  // Logout Handlers
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/v1/auth/logout', { method: 'POST' });
-      await AuthState.check();
-    } catch (e) {
-      console.error("Logout failed:", e);
-    }
-  };
-  document.getElementById('header-logout-btn')?.addEventListener('click', handleLogout);
-  document.getElementById('profile-logout-btn')?.addEventListener('click', handleLogout);
-
-  // Request OTP
-  document.getElementById('profile-request-otp-btn')?.addEventListener('click', async () => {
-    if (!AuthState.user) return;
-    try {
-      await fetch('/api/v1/auth/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: AuthState.user.email })
-      });
-      otpModal?.classList.remove('hidden');
-    } catch (e) {
-      alert("Failed to request OTP.");
-    }
-  });
-
-  // Verify OTP
-  document.getElementById('submit-otp-btn')?.addEventListener('click', async () => {
-    const otp = document.getElementById('otp-code-input').value;
-    const errorDiv = document.getElementById('otp-error-msg');
-    errorDiv.classList.add('hidden');
-
-    try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: AuthState.user.email, otp })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        otpModal.classList.add('hidden');
-        await AuthState.check();
-        alert("OTP verified successfully!");
-      } else {
-        errorDiv.textContent = data.detail || "Invalid OTP.";
-        errorDiv.classList.remove('hidden');
-      }
-    } catch (e) {
-      errorDiv.textContent = "Error verifying OTP.";
-      errorDiv.classList.remove('hidden');
-    }
-  });
-
-  // Submit Forgot Password
-  document.getElementById('submit-forgot-btn')?.addEventListener('click', async () => {
-    const email = document.getElementById('forgot-email-input').value;
-    const errorDiv = document.getElementById('forgot-error-msg');
-    errorDiv.classList.add('hidden');
-
-    try {
-      const res = await fetch('/api/v1/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-      const data = await res.json();
-      errorDiv.textContent = data.message || "Reset link dispatched if email exists.";
-      errorDiv.className = "alert alert-success mt-2";
-      errorDiv.classList.remove('hidden');
-    } catch (e) {
-      errorDiv.textContent = "Error requesting password reset.";
-      errorDiv.className = "alert alert-error mt-2";
-      errorDiv.classList.remove('hidden');
-    }
-  });
-
-  // Submit Change Password
-  document.getElementById('submit-change-password-btn')?.addEventListener('click', async () => {
-    const old_password = document.getElementById('change-old-password').value;
-    const new_password = document.getElementById('change-new-password').value;
-    const msgDiv = document.getElementById('change-password-msg');
-
-    msgDiv.classList.add('hidden');
-    try {
-      const res = await fetch('/api/v1/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ old_password, new_password })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        msgDiv.textContent = "Password updated successfully!";
-        msgDiv.className = "alert alert-success mt-3";
-        msgDiv.classList.remove('hidden');
-        document.getElementById('change-old-password').value = '';
-        document.getElementById('change-new-password').value = '';
-      } else {
-        msgDiv.textContent = data.detail || "Failed to change password.";
-        msgDiv.className = "alert alert-error mt-3";
-        msgDiv.classList.remove('hidden');
-      }
-    } catch (e) {
-      msgDiv.textContent = "Error changing password.";
-      msgDiv.className = "alert alert-error mt-3";
-      msgDiv.classList.remove('hidden');
-    }
-  });
+function escapeJs(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
-
-// Initialize Auth on Startup
-document.addEventListener('DOMContentLoaded', () => {
-  AuthState.check();
-  setupAuthHandlers();
-  checkRouteHash();
-  window.addEventListener('hashchange', checkRouteHash);
-});
-

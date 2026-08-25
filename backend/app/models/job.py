@@ -84,6 +84,8 @@ class Job(Base):
     last_verified = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     verification_count = Column(Integer, default=1)
     consecutive_missing_count = Column(Integer, default=0)
+    closed_at = Column(DateTime, nullable=True)
+    closure_reason = Column(String(255), nullable=True)
 
     posted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True) # Step 18 Index
     discovered_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
@@ -193,4 +195,38 @@ class DiscoveryLock(Base):
     is_locked = Column(Boolean, default=False, nullable=False)
     execution_id = Column(String(36), nullable=True)
     locked_at = Column(DateTime, nullable=True)
+
+
+class CandidateProfile(Base):
+    __tablename__ = "candidate_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    resume_filename = Column(String(255), nullable=True)
+    resume_text = Column(Text, nullable=True)
+    parsed_json = Column(Text, nullable=True)
+    skills = Column(Text, nullable=True)
+    experience_level = Column(String(50), nullable=True)
+    preferred_roles = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class ResumeRecommendationCache(Base):
+    __tablename__ = "resume_recommendations_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    match_score = Column(Float, nullable=False)
+    match_classification = Column(String(50), nullable=False) # Strong Match, Good Match, Moderate Match, Weak Match
+    priority = Column(String(20), nullable=False) # HIGH, MEDIUM, LOW
+    breakdown_json = Column(Text, nullable=True)
+    matching_skills_json = Column(Text, nullable=True)
+    missing_skills_json = Column(Text, nullable=True)
+    why_matches = Column(Text, nullable=True)
+    potential_gap = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
 
