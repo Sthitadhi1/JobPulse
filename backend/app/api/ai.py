@@ -22,9 +22,8 @@ async def upload_and_parse_resume(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    PART 4 & 5 & 6 — Resume Upload, Parsing & Top 30 Recommendations.
-    Supports PDF and DOCX uploads up to 10 MB.
-    Parses candidate profile and generates top 30 active job recommendations.
+    Resume Upload, Multi-Section Parsing & Top 30 Recommendations.
+    Extracts Education, 15+ Top Skills, Experience, and Projects.
     """
     extracted_text = ""
     filename = "resume.pdf"
@@ -62,10 +61,10 @@ async def upload_and_parse_resume(
             detail="Could not extract readable text from document. Please ensure the document is a valid PDF or DOCX file."
         )
 
-    # Parse profile
+    # Comprehensive multi-section parse
     parsed_profile = ResumeParserEngine.parse_profile(extracted_text, filename)
 
-    # Save to user profile in DB if user is authenticated
+    # Save or update candidate profile in DB
     if current_user:
         res = await db.execute(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
         cp = res.scalars().first()
@@ -89,7 +88,6 @@ async def upload_and_parse_resume(
             db.add(cp)
         await db.commit()
 
-    # Generate Top 30 Recommendations against Job.status == "ACTIVE"
     recommendations = await AIEngineLayer.get_top_30_recommendations(db, parsed_profile)
 
     return {
@@ -112,21 +110,39 @@ async def get_stored_recommendations(
     if current_user:
         res = await db.execute(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
         cp = res.scalars().first()
-        if cp and cp.parsed_json:
-            try:
-                candidate_profile = json.loads(cp.parsed_json)
-            except Exception:
-                candidate_profile = None
+        if cp:
+            if cp.resume_text:
+                # Always re-parse with the latest multi-section engine
+                candidate_profile = ResumeParserEngine.parse_profile(cp.resume_text, cp.resume_filename)
+                cp.parsed_json = json.dumps(candidate_profile)
+                await db.commit()
+            elif cp.parsed_json:
+                try:
+                    candidate_profile = json.loads(cp.parsed_json)
+                except Exception:
+                    pass
 
     if not candidate_profile:
-        # Default student candidate profile
-        candidate_profile = {
-            "name": current_user.name if current_user else "Student Candidate",
-            "degree": "B.Tech / Bachelor's in CS/Tech",
-            "experience_level": "Fresher",
-            "skills": ["Python", "Java", "React", "FastAPI", "SQL", "Data Structures", "Git", "REST API", "Machine Learning"],
-            "preferred_roles": ["Software Development Engineer (SDE 1)", "Backend Engineer", "Full Stack Developer"]
-        }
+        # Rich default candidate profile
+        candidate_profile = ResumeParserEngine.parse_profile("""
+Alex Sharma
+alex.sharma@example.com | +91 98765 43210 | Bengaluru, India
+Education:
+B.Tech in Computer Science and Engineering, National Institute of Technology (NIT), 2025 | CGPA: 8.85/10.0
+Technical Skills:
+Languages: Python, Java, C++, TypeScript, SQL, Go
+Frameworks: FastAPI, Django, React, Next.js, Spring Boot, Node.js, REST APIs, Microservices
+Databases: PostgreSQL, Redis, MongoDB
+DevOps & Cloud: AWS, Docker, Kubernetes, CI/CD, Git, Linux
+Core CS: Data Structures, Algorithms, System Design, OOP
+Work Experience:
+Software Engineering Intern - Technology Solutions (May 2024 - Aug 2024)
+- Developed and maintained REST APIs and backend microservices using FastAPI and PostgreSQL.
+- Improved query performance and implemented automated integration tests.
+Projects:
+Cloud-Native Distributed Task Queue - Built microservices backend using Python, FastAPI, Docker, and Redis.
+Full-Stack Career Intelligence Engine - Interactive web platform with React, TypeScript, and SQL.
+        """, "Alex_Sharma_Resume.pdf")
 
     recommendations = await AIEngineLayer.get_top_30_recommendations(db, candidate_profile)
 
@@ -159,7 +175,9 @@ async def match_resume_to_specific_job(
     elif current_user:
         res_cp = await db.execute(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
         cp = res_cp.scalars().first()
-        if cp and cp.parsed_json:
+        if cp and cp.resume_text:
+            cand_profile = ResumeParserEngine.parse_profile(cp.resume_text)
+        elif cp and cp.parsed_json:
             cand_profile = json.loads(cp.parsed_json)
         else:
             cand_profile = {
