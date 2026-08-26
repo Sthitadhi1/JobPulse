@@ -714,51 +714,65 @@ function renderResumeMatchView(profile, recommendations) {
         <div class="bento-card">
           <div class="bento-card-header">
             <div class="bento-card-title">🎓 Education & Background</div>
-            <span class="badge badge-outline">${escapeHtml(edu.grad_year || '2025')}</span>
+            <span class="badge badge-outline">Class of ${escapeHtml(edu.grad_year || '2027')}</span>
           </div>
-          <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">${escapeHtml(edu.degree || 'B.Tech in Computer Science')}</div>
-          <div style="font-size: 13px; color: var(--accent-blue); margin-top: 4px;">${escapeHtml(edu.institution || 'Engineering University')}</div>
-          <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-            <span>Graduation: <strong>${escapeHtml(edu.grad_year || '2025')}</strong></span>
-            <span>Academic GPA: <strong>${escapeHtml(edu.gpa || '8.8 / 10.0')}</strong></span>
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">${escapeHtml(edu.degree || 'B.Tech in CSE (Software Engineering Specialization)')}</div>
+          <div style="font-size: 13px; color: var(--accent-blue); margin-top: 4px;">${escapeHtml(edu.institution || 'SRM Institute of Science and Technology, Chennai')}</div>
+          <div style="display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap;">
+            <span>Graduation: <strong>${escapeHtml(edu.grad_range || edu.grad_year || 'June 2023 – May 2027')}</strong></span>
+            <span>Academic GPA: <strong>${escapeHtml(edu.gpa || '8.5 / 10.0')}</strong></span>
           </div>
         </div>
 
         <!-- 3. Top 15+ Ranked Technical Skills -->
         <div class="bento-card">
           <div class="bento-card-header">
-            <div class="bento-card-title">💻 Top Technical Skills (${topSkills.length} Identified)</div>
+            <div class="bento-card-title">💻 Technical Skills (${topSkills.length} Identified)</div>
             <span class="text-xs text-muted">Ranked by Stack Depth</span>
           </div>
           <div class="skills-badge-cluster">
             ${topSkills.map((sk, idx) => {
               let tagClass = 'skill-pill-lang';
               if (['React', 'Next.js', 'FastAPI', 'Django', 'Spring Boot', 'Node.js', 'Express', 'Tailwind'].includes(sk)) tagClass = 'skill-pill-framework';
-              else if (['PostgreSQL', 'Redis', 'MongoDB', 'MySQL', 'SQL'].includes(sk)) tagClass = 'skill-pill-db';
-              else if (['AWS', 'Docker', 'Kubernetes', 'CI/CD', 'Git', 'Linux'].includes(sk)) tagClass = 'skill-pill-cloud';
-              else if (['Machine Learning', 'PyTorch', 'TensorFlow', 'Deep Learning', 'NLP', 'AI'].includes(sk)) tagClass = 'skill-pill-ml';
-              else if (['Data Structures', 'Algorithms', 'System Design', 'OOP'].includes(sk)) tagClass = 'skill-pill-core';
+              else if (['PostgreSQL', 'Redis', 'MongoDB', 'MySQL', 'SQL', 'Databricks', 'Apache Spark', 'Spark', 'SQLAlchemy'].includes(sk)) tagClass = 'skill-pill-db';
+              else if (['AWS', 'Docker', 'Kubernetes', 'CI/CD', 'Git', 'Linux', 'GitHub Actions', 'Microsoft Azure', 'Azure', 'EC2', 'S3'].includes(sk)) tagClass = 'skill-pill-cloud';
+              else if (['Machine Learning', 'PyTorch', 'TensorFlow', 'Deep Learning', 'NLP', 'AI', 'Hugging Face', 'Transformers', 'LangChain', 'RAG', 'CNNs', 'SHAP', 'XGBoost', 'Graph Machine Learning', 'Graph Neural Networks'].includes(sk)) tagClass = 'skill-pill-ml';
+              else if (['Data Structures', 'Algorithms', 'System Design', 'OOP', 'Multithreading', 'Problem Solving', 'Debugging', 'Testing', 'CMake'].includes(sk)) tagClass = 'skill-pill-core';
               return `<span class="skill-pill-ranked ${tagClass}">${escapeHtml(sk)}</span>`;
             }).join('')}
           </div>
         </div>
 
-        <!-- 4. Work Experience & Internships -->
+        <!-- 4. Experience & Leadership / Fresher Status -->
         <div class="bento-card">
           <div class="bento-card-header">
-            <div class="bento-card-title">💼 Work Experience & Internships</div>
-            <span class="text-xs text-muted">${workExps.length} Records</span>
+            <div class="bento-card-title">💼 Experience & Leadership</div>
+            <span class="badge badge-outline">${workExps.length > 0 ? `${workExps.length} Roles` : ((profile.leadership && profile.leadership.length > 0) ? `${profile.leadership.length} Leadership Roles` : 'Fresher / Student')}</span>
           </div>
-          ${workExps.map(exp => `
+          ${workExps.length > 0 ? workExps.map(exp => `
             <div class="timeline-item">
               <div class="timeline-role">${escapeHtml(exp.role || 'Software Engineering Intern')}</div>
               <div class="timeline-company">${escapeHtml(exp.company || 'Tech Organization')}</div>
-              <div class="timeline-duration">📅 ${escapeHtml(exp.duration || 'Summer 2024')}</div>
+              <div class="timeline-duration">📅 ${escapeHtml(exp.duration || '2024')}</div>
               <ul class="timeline-bullets">
                 ${(exp.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('')}
               </ul>
             </div>
-          `).join('')}
+          `).join('') : ((profile.leadership && profile.leadership.length > 0) ? profile.leadership.map(lead => `
+            <div class="timeline-item">
+              <div class="timeline-role">${escapeHtml(lead.role)}</div>
+              <div class="timeline-company">${escapeHtml(lead.organization)}</div>
+              <div class="timeline-duration">📅 ${escapeHtml(lead.duration)}</div>
+              <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(lead.description)}</div>
+            </div>
+          `).join('') : `
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+              🌱 <strong>Fresher / Student Candidate</strong> — No corporate work experience listed.
+              <div style="color: var(--text-muted); font-size: 12px; margin-top: 6px;">
+                Demonstrated strong technical readiness with 4+ production engineering projects and open-source contributions.
+              </div>
+            </div>
+          `)}
         </div>
 
         <!-- 5. Key Projects Portfolio -->
