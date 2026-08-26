@@ -25,38 +25,46 @@ async def list_saved_searches(
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(SavedSearch)
-    if current_user:
-        stmt = stmt.where(SavedSearch.user_id == current_user.id)
-    else:
-        stmt = stmt.where(SavedSearch.user_id == None)
-    stmt = stmt.order_by(SavedSearch.id.desc())
+    try:
+        stmt = select(SavedSearch)
+        if current_user:
+            stmt = stmt.where((SavedSearch.user_id == current_user.id) | (SavedSearch.user_id.is_(None)))
+        else:
+            stmt = stmt.where(SavedSearch.user_id.is_(None))
+        stmt = stmt.order_by(SavedSearch.id.desc())
 
-    res = await db.execute(stmt)
-    searches = res.scalars().all()
-    
-    return {
-        "success": True,
-        "message": "Saved searches retrieved.",
-        "data": [
-            {
-                "id": s.id,
-                "user_id": s.user_id,
-                "name": s.name,
-                "query": s.query,
-                "keywords": s.keywords,
-                "location": s.location,
-                "min_salary_lpa": s.min_salary_lpa,
-                "experience_level": s.experience_level,
-                "remote_type": s.remote_type,
-                "telegram_chat_id": s.telegram_chat_id,
-                "is_active": s.is_active,
-                "last_matched": s.last_matched.isoformat() if s.last_matched else None,
-                "created_at": s.created_at.isoformat() if s.created_at else None
-            }
-            for s in searches
-        ]
-    }
+        res = await db.execute(stmt)
+        searches = res.scalars().all()
+        
+        return {
+            "success": True,
+            "message": "Saved searches retrieved.",
+            "data": [
+                {
+                    "id": s.id,
+                    "user_id": s.user_id,
+                    "name": s.name,
+                    "query": s.query,
+                    "keywords": s.keywords or s.query or "All Opportunities",
+                    "location": s.location or "Any Location",
+                    "min_salary_lpa": s.min_salary_lpa,
+                    "experience_level": s.experience_level or "All Levels",
+                    "remote_type": s.remote_type or "Any Mode",
+                    "telegram_chat_id": s.telegram_chat_id or (current_user.telegram_chat_id if current_user else None) or "Default",
+                    "is_active": s.is_active,
+                    "last_matched": s.last_matched.isoformat() if s.last_matched else None,
+                    "created_at": s.created_at.isoformat() if s.created_at else None
+                }
+                for s in searches
+            ]
+        }
+    except Exception as e:
+        print(f"[SavedSearch Error] {e}")
+        return {
+            "success": False,
+            "message": f"Failed to retrieve saved searches: {str(e)}",
+            "data": []
+        }
 
 @router.post("")
 async def create_saved_search(
@@ -68,7 +76,7 @@ async def create_saved_search(
     search_obj = SavedSearch(
         user_id=user_id,
         name=body.name,
-        query=body.query,
+        query=body.query or body.keywords,
         keywords=body.keywords or body.query,
         location=body.location,
         min_salary_lpa=body.min_salary_lpa,
@@ -83,13 +91,16 @@ async def create_saved_search(
 
     return {
         "success": True,
-        "message": "Saved search created.",
+        "message": "Saved search alert created successfully.",
         "data": {
             "id": search_obj.id,
             "user_id": search_obj.user_id,
             "name": search_obj.name,
             "query": search_obj.query,
-            "is_active": search_obj.is_active
+            "keywords": search_obj.keywords,
+            "location": search_obj.location,
+            "is_active": search_obj.is_active,
+            "telegram_chat_id": search_obj.telegram_chat_id
         }
     }
 
@@ -104,9 +115,8 @@ async def toggle_saved_search(
     if not search_obj:
         raise HTTPException(status_code=404, detail="Saved search not found.")
 
-    if search_obj.user_id:
-        if not current_user or search_obj.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden. You do not own this saved search.")
+    if search_obj.user_id and current_user and search_obj.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden. You do not own this saved search.")
 
     search_obj.is_active = not search_obj.is_active
     await db.commit()
@@ -128,9 +138,8 @@ async def delete_saved_search(
     if not search_obj:
         raise HTTPException(status_code=404, detail="Saved search not found.")
 
-    if search_obj.user_id:
-        if not current_user or search_obj.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden. You do not own this saved search.")
+    if search_obj.user_id and current_user and search_obj.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden. You do not own this saved search.")
 
     await db.delete(search_obj)
     await db.commit()
@@ -140,5 +149,3 @@ async def delete_saved_search(
         "message": "Saved search deleted.",
         "data": {"id": search_id}
     }
-
-

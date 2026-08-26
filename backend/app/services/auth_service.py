@@ -7,9 +7,14 @@ from sqlalchemy.future import select
 
 try:
     from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["argon2", "bcrypt", "pbkdf2_sha256"], deprecated="auto")
+    pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 except Exception:
     pwd_context = None
+
+try:
+    import bcrypt
+except Exception:
+    bcrypt = None
 
 from backend.app.config import settings
 from backend.app.models.job import User
@@ -23,38 +28,66 @@ from backend.app.models.auth_models import (
 class AuthService:
     @staticmethod
     def normalize_email(email: str) -> str:
+        if not email:
+            return ""
         return email.strip().lower()
 
     @staticmethod
     def hash_password(password: str) -> str:
-        if pwd_context:
-            try:
-                return pwd_context.hash(password)
-            except Exception:
-                pass
-        # Fallback PBKDF2 HMAC SHA256 (600,000 iterations per OWASP recommendation)
+        # Standard PBKDF2 HMAC SHA256 (compatible everywhere, robust, zero platform native binary dependency issues)
         salt = secrets.token_hex(16)
-        hashed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 600000).hex()
+        hashed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000).hex()
         return f"pbkdf2_sha256${salt}${hashed}"
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
-        if pwd_context and not hashed_password.startswith("pbkdf2_sha256$"):
-            try:
-                return pwd_context.verify(plain_password, hashed_password)
-            except Exception:
-                pass
+        if not plain_password or not hashed_password:
+            return False
+
+        # 1. Check PBKDF2 SHA256 standard
         if hashed_password.startswith("pbkdf2_sha256$"):
             try:
                 parts = hashed_password.split("$")
                 salt = parts[1]
                 expected_hash = parts[2]
-                computed = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("utf-8"), 600000).hex()
-                return secrets.compare_digest(computed, expected_hash)
+                computed = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("utf-8"), 100000).hex()
+                if secrets.compare_digest(computed, expected_hash):
+                    return True
+                # Also try 600,000 iterations for backwards compatibility with any earlier records
+                computed_600k = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("utf-8"), 600000).hex()
+                return secrets.compare_digest(computed_600k, expected_hash)
             except Exception:
-                return False
-        return False
+                pass
 
+        # 2. Check bcrypt hash ($2b$, $2a$, $2y$)
+        if hashed_password.startswith(("$2b$", "$2a$", "$2y$")):
+            if bcrypt:
+                try:
+                    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+                except Exception:
+                    pass
+            if pwd_context:
+                try:
+                    return pwd_context.verify(plain_password, hashed_password)
+                except Exception:
+                    pass
+
+        # 3. Check passlib context general verify
+        if pwd_context:
+            try:
+                return pwd_context.verify(plain_password, hashed_password)
+            except Exception:
+                pass
+
+        # 4. Fallback SHA256 comparison
+        try:
+            raw_sha = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
+            if secrets.compare_digest(raw_sha, hashed_password):
+                return True
+        except Exception:
+            pass
+
+        return False
 
     @staticmethod
     def hash_token(token: str) -> str:
@@ -78,7 +111,7 @@ class AuthService:
     @classmethod
     async def create_user_session(cls, db: AsyncSession, user_id: str) -> Tuple[str, UserSession]:
         raw_token, token_hash = cls.generate_token()
-        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(days=14)
         
         session = UserSession(
             user_id=user_id,
@@ -108,7 +141,6 @@ class AuthService:
         if not session:
             return None
 
-        # Update last accessed timestamp
         session.last_accessed_at = now
         await db.commit()
 

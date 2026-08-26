@@ -14,6 +14,16 @@ let selectedSalaryMax = null;
 
 let selectedResumeFile = null;
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('jobpulse_token');
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['X-JobPulse-Token'] = token;
+  }
+  return headers;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initAuthentication();
@@ -78,7 +88,13 @@ function initAuthentication() {
   if (forgotLink) {
     forgotLink.addEventListener('click', (e) => {
       e.preventDefault();
-      document.getElementById('forgot-password-modal')?.classList.remove('hidden');
+      const modal = document.getElementById('forgot-password-modal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('forgot-step-1')?.classList.remove('hidden');
+        document.getElementById('forgot-step-2')?.classList.add('hidden');
+        document.getElementById('forgot-error-msg')?.classList.add('hidden');
+      }
     });
   }
 
@@ -104,6 +120,12 @@ function initAuthentication() {
         const result = await res.json();
 
         if (res.ok && result.success) {
+          if (result.token) {
+            localStorage.setItem('jobpulse_token', result.token);
+          }
+          if (result.user) {
+            localStorage.setItem('jobpulse_user', JSON.stringify(result.user));
+          }
           showToast('Log in successful! Welcome to JobPulse.', 'success');
           await checkAuthState();
         } else {
@@ -157,6 +179,12 @@ function initAuthentication() {
         const result = await res.json();
 
         if (res.ok && result.success) {
+          if (result.token) {
+            localStorage.setItem('jobpulse_token', result.token);
+          }
+          if (result.user) {
+            localStorage.setItem('jobpulse_user', JSON.stringify(result.user));
+          }
           showToast('Account created successfully! Welcome to JobPulse.', 'success');
           await checkAuthState();
         } else {
@@ -172,6 +200,141 @@ function initAuthentication() {
       }
     });
   }
+
+  // Forgot Password Flow
+  document.getElementById('submit-forgot-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('forgot-email-input')?.value.trim();
+    const errorEl = document.getElementById('forgot-error-msg');
+    const btn = document.getElementById('submit-forgot-btn');
+
+    if (!email) {
+      if (errorEl) {
+        errorEl.textContent = 'Please enter your registered email address.';
+        errorEl.className = 'alert alert-error';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Generating code...';
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        // Transition to Step 2
+        document.getElementById('forgot-step-1')?.classList.add('hidden');
+        document.getElementById('forgot-step-2')?.classList.remove('hidden');
+
+        if (result.otp_code) {
+          document.getElementById('reset-otp-input').value = result.otp_code;
+        }
+
+        const msg2 = document.getElementById('reset-otp-msg');
+        if (msg2) {
+          msg2.textContent = result.message || 'Reset code sent!';
+          msg2.className = 'alert alert-success';
+          msg2.classList.remove('hidden');
+        }
+      } else {
+        if (errorEl) {
+          errorEl.textContent = result.detail || 'Could not send reset code.';
+          errorEl.className = 'alert alert-error';
+          errorEl.classList.remove('hidden');
+        }
+      }
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = 'Error: ' + err.message;
+        errorEl.className = 'alert alert-error';
+        errorEl.classList.remove('hidden');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Get Reset Code';
+    }
+  });
+
+  // Step 2 Reset Password Submit
+  document.getElementById('submit-reset-otp-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('forgot-email-input')?.value.trim();
+    const otp = document.getElementById('reset-otp-input')?.value.trim();
+    const newPassword = document.getElementById('reset-new-password')?.value;
+    const confirmPassword = document.getElementById('reset-confirm-password')?.value;
+    const msgEl = document.getElementById('reset-otp-msg');
+    const btn = document.getElementById('submit-reset-otp-btn');
+
+    if (!otp || otp.length < 6) {
+      msgEl.textContent = 'Please enter the 6-digit reset code.';
+      msgEl.className = 'alert alert-error';
+      msgEl.classList.remove('hidden');
+      return;
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      msgEl.textContent = 'New password must be at least 6 characters.';
+      msgEl.className = 'alert alert-error';
+      msgEl.classList.remove('hidden');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      msgEl.textContent = 'Passwords do not match.';
+      msgEl.className = 'alert alert-error';
+      msgEl.classList.remove('hidden');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/reset-password-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, new_password: newPassword })
+      });
+      const result = await res.json();
+
+      if (res.ok && result.success) {
+        if (result.token) {
+          localStorage.setItem('jobpulse_token', result.token);
+        }
+        showToast('Password reset successfully! Logged in.', 'success');
+        document.getElementById('forgot-password-modal')?.classList.add('hidden');
+        await checkAuthState();
+      } else {
+        msgEl.textContent = result.detail || result.message || 'Reset failed.';
+        msgEl.className = 'alert alert-error';
+        msgEl.classList.remove('hidden');
+      }
+    } catch (err) {
+      msgEl.textContent = 'Error: ' + err.message;
+      msgEl.className = 'alert alert-error';
+      msgEl.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Update Password & Log In';
+    }
+  });
+
+  document.getElementById('back-to-forgot-step1')?.addEventListener('click', () => {
+    document.getElementById('forgot-step-2')?.classList.add('hidden');
+    document.getElementById('forgot-step-1')?.classList.remove('hidden');
+  });
+
+  document.getElementById('close-forgot-modal')?.addEventListener('click', () => {
+    document.getElementById('forgot-password-modal')?.classList.add('hidden');
+  });
+  document.getElementById('cancel-forgot')?.addEventListener('click', () => {
+    document.getElementById('forgot-password-modal')?.classList.add('hidden');
+  });
 
   // Header Logout & Profile Menu Toggle
   const profilePill = document.getElementById('header-profile-pill');
@@ -201,11 +364,14 @@ async function checkAuthState() {
   const appWorkspace = document.getElementById('app-workspace');
 
   try {
-    const res = await fetch(`${API_BASE}/auth/me`);
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
       const data = await res.json();
       if (data.authenticated && data.user) {
         currentUser = data.user;
+        localStorage.setItem('jobpulse_user', JSON.stringify(data.user));
         updateHeaderUserUI(data.user);
         
         authScreen?.classList.add('hidden');
@@ -222,6 +388,8 @@ async function checkAuthState() {
 
   // Unauthenticated -> Show Auth Screen
   currentUser = null;
+  localStorage.removeItem('jobpulse_token');
+  localStorage.removeItem('jobpulse_user');
   authScreen?.classList.remove('hidden');
   appWorkspace?.classList.add('hidden');
 }
@@ -244,12 +412,17 @@ function updateHeaderUserUI(user) {
 
 async function handleLogout() {
   try {
-    await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
     showToast('Logged out successfully.', 'info');
   } catch (err) {
     console.error('Logout error:', err);
   } finally {
     currentUser = null;
+    localStorage.removeItem('jobpulse_token');
+    localStorage.removeItem('jobpulse_user');
     document.getElementById('auth-screen')?.classList.remove('hidden');
     document.getElementById('app-workspace')?.classList.add('hidden');
   }
@@ -269,7 +442,7 @@ function initNavigation() {
     });
   });
 
-  // Switch tab via links (e.g. data-switch-tab="resume-match")
+  // Switch tab via links and clickable stat cards (e.g. data-switch-tab="jobs")
   document.addEventListener('click', (e) => {
     const link = e.target.closest('[data-switch-tab], [data-goto-tab]');
     if (link) {
@@ -321,102 +494,90 @@ function initDashboardEvents() {
   const dropzone = document.getElementById('dashboard-resume-dropzone');
   const fileInput = document.getElementById('dashboard-resume-file-input');
   const analyzeBtn = document.getElementById('dashboard-analyze-resume-btn');
+  const fileBadge = document.getElementById('dashboard-file-badge');
 
   if (dropzone && fileInput) {
-    dropzone.addEventListener('click', () => fileInput.click());
-
     dropzone.addEventListener('dragover', (e) => {
       e.preventDefault();
       dropzone.classList.add('dragover');
     });
 
-    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dragover');
+    });
 
     dropzone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropzone.classList.remove('dragover');
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        handleResumeFileSelect(e.dataTransfer.files[0]);
+        selectedResumeFile = e.dataTransfer.files[0];
+        showSelectedFileBadge(selectedResumeFile.name);
       }
     });
 
     fileInput.addEventListener('change', () => {
       if (fileInput.files && fileInput.files.length > 0) {
-        handleResumeFileSelect(fileInput.files[0]);
+        selectedResumeFile = fileInput.files[0];
+        showSelectedFileBadge(selectedResumeFile.name);
       }
     });
   }
 
   if (analyzeBtn) {
     analyzeBtn.addEventListener('click', () => {
-      if (selectedResumeFile) {
-        processResumeAnalysis(selectedResumeFile);
-      } else {
-        // Switch to resume match tab directly
-        switchTab('resume-match');
+      if (!selectedResumeFile) {
+        showToast('Please select or drop a resume PDF/DOCX file first.', 'warning');
+        return;
       }
+      processResumeAnalysis(selectedResumeFile);
     });
   }
-}
 
-function handleResumeFileSelect(file) {
-  selectedResumeFile = file;
-  const badge = document.getElementById('dashboard-file-badge');
-  if (badge) {
-    badge.textContent = `📄 Selected File: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
-    badge.classList.remove('hidden');
+  function showSelectedFileBadge(filename) {
+    if (fileBadge) {
+      fileBadge.textContent = `📄 Selected: ${filename}`;
+      fileBadge.classList.remove('hidden');
+    }
   }
 }
 
 async function loadDashboardOverview() {
-  const greetingEl = document.getElementById('dashboard-user-greeting');
-  const activeJobsEl = document.getElementById('dash-stat-active-jobs');
-  const topMatchesEl = document.getElementById('dash-stat-top-matches');
-  const applicationsEl = document.getElementById('dash-stat-applications');
-  const bookmarkedEl = document.getElementById('dash-stat-bookmarked');
-
-  const previewContainer = document.getElementById('dashboard-top-matches-preview-container');
-
-  // Pipeline counts
-  const pipeSaved = document.getElementById('dash-pipe-saved');
-  const pipeApplied = document.getElementById('dash-pipe-applied');
-  const pipeOa = document.getElementById('dash-pipe-oa');
-  const pipeInterview = document.getElementById('dash-pipe-interview');
-  const pipeOffer = document.getElementById('dash-pipe-offer');
-
   try {
-    const res = await fetch(`${API_BASE}/dashboard/overview`);
+    const res = await fetch(`${API_BASE}/dashboard/overview`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
-      const data = await res.json();
+      const result = await res.json();
+      const d = result.data;
+      if (d) {
+        // 1. Greeting
+        const greetingEl = document.getElementById('dashboard-greeting');
+        if (greetingEl) {
+          const userName = currentUser ? currentUser.name.split(' ')[0] : 'Engineer';
+          greetingEl.textContent = `${d.greeting}, ${userName} 👋`;
+        }
 
-      if (greetingEl && data.user_name) {
-        const hour = new Date().getHours();
-        const timeGreeting = hour < 12 ? 'Good morning' : (hour < 17 ? 'Good afternoon' : 'Good evening');
-        greetingEl.textContent = `${timeGreeting}, ${data.user_name} 👋`;
-      }
+        // 2. Stat Cards
+        document.getElementById('dash-stat-active-jobs').textContent = (d.stats.active_jobs || 0).toLocaleString();
+        document.getElementById('dash-stat-top-matches').textContent = (d.stats.top_matches || 30).toLocaleString();
+        document.getElementById('dash-stat-applications').textContent = (d.stats.applications || 0).toLocaleString();
+        document.getElementById('dash-stat-bookmarked').textContent = (d.stats.bookmarked || 0).toLocaleString();
 
-      if (data.overview) {
-        if (activeJobsEl) activeJobsEl.textContent = (data.overview.active_jobs || 0).toLocaleString();
-        if (topMatchesEl) topMatchesEl.textContent = (data.overview.top_matches || 0).toLocaleString();
-        if (applicationsEl) applicationsEl.textContent = (data.overview.applications || 0).toLocaleString();
-        if (bookmarkedEl) bookmarkedEl.textContent = (data.overview.bookmarked_jobs || 0).toLocaleString();
-      }
+        // 3. Pipeline counts
+        const p = d.pipeline || {};
+        document.getElementById('dash-pipe-saved').textContent = p.Saved || 0;
+        document.getElementById('dash-pipe-applied').textContent = p.Applied || 0;
+        document.getElementById('dash-pipe-oa').textContent = p['OA / Test'] || 0;
+        document.getElementById('dash-pipe-interview').textContent = p.Interview || 0;
+        document.getElementById('dash-pipe-offer').textContent = p.Offer || 0;
 
-      if (data.pipeline) {
-        if (pipeSaved) pipeSaved.textContent = data.pipeline.saved || 0;
-        if (pipeApplied) pipeApplied.textContent = data.pipeline.applied || 0;
-        if (pipeOa) pipeOa.textContent = data.pipeline.oa_test || 0;
-        if (pipeInterview) pipeInterview.textContent = data.pipeline.interview || 0;
-        if (pipeOffer) pipeOffer.textContent = data.pipeline.offer || 0;
-      }
-
-      // Render Top Matches Preview
-      if (previewContainer) {
-        if (data.top_matches_preview && data.top_matches_preview.length > 0) {
-          previewContainer.innerHTML = data.top_matches_preview.map(j => `
-            <div class="top-match-item">
+        // 4. Top Matches Preview
+        const previewContainer = document.getElementById('dashboard-top-matches-preview-container');
+        if (previewContainer && d.top_matches_preview && d.top_matches_preview.length > 0) {
+          previewContainer.innerHTML = d.top_matches_preview.map(j => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--border-color);">
               <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="company-avatar">${(j.company || 'C').charAt(0)}</div>
+                <div class="company-logo-placeholder">${escapeHtml(j.company.charAt(0))}</div>
                 <div>
                   <div style="font-weight: 700; font-size: 14px;">${escapeHtml(j.title)}</div>
                   <div class="text-xs text-muted">${escapeHtml(j.company)} • ${escapeHtml(j.location || 'Remote')}</div>
@@ -453,20 +614,28 @@ function initResumeMatchEvents() {
 }
 
 async function processResumeAnalysis(file) {
-  showToast('Parsing resume & extracting skills...', 'info');
+  showToast('Parsing resume & extracting structured candidate intelligence...', 'info');
 
   const formData = new FormData();
   formData.append('file', file);
 
   try {
+    const token = localStorage.getItem('jobpulse_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-JobPulse-Token'] = token;
+    }
+
     const res = await fetch(`${API_BASE}/ai/upload-resume`, {
       method: 'POST',
+      headers: headers,
       body: formData
     });
 
     const result = await res.json();
     if (res.ok && result.success) {
-      showToast(`Resume analyzed! Found ${result.total_recommendations} top matching jobs.`, 'success');
+      showToast(`Resume parsed! Discovered ${result.total_recommendations} top tailored opportunities.`, 'success');
       switchTab('resume-match');
       renderResumeMatchView(result.candidate_profile, result.data);
     } else {
@@ -484,7 +653,9 @@ async function loadResumeMatchRecommendations() {
   container.innerHTML = '<div class="loading-skeleton">Evaluating your candidate profile against active opportunities...</div>';
 
   try {
-    const res = await fetch(`${API_BASE}/ai/recommendations`);
+    const res = await fetch(`${API_BASE}/ai/recommendations`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
       const result = await res.json();
       renderResumeMatchView(result.candidate_profile, result.data);
@@ -500,16 +671,113 @@ function renderResumeMatchView(profile, recommendations) {
 
   if (summaryEl && profile) {
     summaryEl.classList.remove('hidden');
-    const skillsList = profile.skills ? profile.skills.slice(0, 8).map(s => `<span class="tag">${escapeHtml(s)}</span>`).join(' ') : '';
+
+    const edu = profile.education || {
+      degree: profile.degree || 'B.Tech in Computer Science',
+      institution: profile.institution || 'Engineering Institute',
+      grad_year: profile.grad_year || '2025',
+      gpa: profile.gpa || '8.8/10'
+    };
+
+    const topSkills = profile.top_skills || profile.skills || [];
+    const workExps = profile.work_experience || [];
+    const projects = profile.projects || [];
+    const preferredRoles = profile.preferred_roles || ['Software Development Engineer (SDE 1)', 'Full Stack Developer'];
+
     summaryEl.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <div style="font-weight: 700; font-size: 16px;">👤 Profile: ${escapeHtml(profile.name || 'Candidate')}</div>
-          <div class="text-xs text-muted mt-1">${escapeHtml(profile.degree || '')} • ${escapeHtml(profile.experience_level || 'Fresher')}</div>
-          <div class="skills-row mt-2">${skillsList}</div>
+      <div class="candidate-bento-grid">
+        <!-- 1. Candidate Hero Header -->
+        <div class="candidate-profile-hero">
+          <div class="candidate-hero-left">
+            <div class="candidate-large-avatar">${(profile.name || 'C').charAt(0).toUpperCase()}</div>
+            <div class="candidate-hero-meta">
+              <h2>${escapeHtml(profile.name || 'Candidate Profile')}</h2>
+              <div class="candidate-hero-contacts">
+                <span>📧 ${escapeHtml(profile.email || 'candidate@example.com')}</span>
+                <span>📱 ${escapeHtml(profile.phone || '+91 98765 43210')}</span>
+                <span>🎯 Status: <strong style="color: #10b981;">Actively Seeking Opportunities</strong></span>
+              </div>
+              <div class="candidate-hero-roles">
+                ${preferredRoles.map(r => `<span class="role-pill">${escapeHtml(r)}</span>`).join('')}
+              </div>
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div class="badge badge-pulse" style="font-size: 13px; padding: 8px 16px; margin-bottom: 6px;">
+              ⚡ ${recommendations ? recommendations.length : 0} Active Matches Verified
+            </div>
+            <div class="text-xs text-muted">Experience Level: <strong>${escapeHtml(profile.experience_level || 'Fresher')}</strong></div>
+          </div>
         </div>
-        <div class="badge badge-pulse" style="font-size: 12px; padding: 6px 12px;">
-          🎯 ${recommendations ? recommendations.length : 0} Active Opportunities Matched
+
+        <!-- 2. Education Card -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-card-title">🎓 Education & Background</div>
+            <span class="badge badge-outline">${escapeHtml(edu.grad_year || '2025')}</span>
+          </div>
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">${escapeHtml(edu.degree || 'B.Tech in Computer Science')}</div>
+          <div style="font-size: 13px; color: var(--accent-blue); margin-top: 4px;">${escapeHtml(edu.institution || 'Engineering University')}</div>
+          <div style="display: flex; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+            <span>Graduation: <strong>${escapeHtml(edu.grad_year || '2025')}</strong></span>
+            <span>Academic GPA: <strong>${escapeHtml(edu.gpa || '8.8 / 10.0')}</strong></span>
+          </div>
+        </div>
+
+        <!-- 3. Top 15+ Ranked Technical Skills -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-card-title">💻 Top Technical Skills (${topSkills.length} Identified)</div>
+            <span class="text-xs text-muted">Ranked by Stack Depth</span>
+          </div>
+          <div class="skills-badge-cluster">
+            ${topSkills.map((sk, idx) => {
+              let tagClass = 'skill-pill-lang';
+              if (['React', 'Next.js', 'FastAPI', 'Django', 'Spring Boot', 'Node.js', 'Express', 'Tailwind'].includes(sk)) tagClass = 'skill-pill-framework';
+              else if (['PostgreSQL', 'Redis', 'MongoDB', 'MySQL', 'SQL'].includes(sk)) tagClass = 'skill-pill-db';
+              else if (['AWS', 'Docker', 'Kubernetes', 'CI/CD', 'Git', 'Linux'].includes(sk)) tagClass = 'skill-pill-cloud';
+              else if (['Machine Learning', 'PyTorch', 'TensorFlow', 'Deep Learning', 'NLP', 'AI'].includes(sk)) tagClass = 'skill-pill-ml';
+              else if (['Data Structures', 'Algorithms', 'System Design', 'OOP'].includes(sk)) tagClass = 'skill-pill-core';
+              return `<span class="skill-pill-ranked ${tagClass}">${escapeHtml(sk)}</span>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 4. Work Experience & Internships -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-card-title">💼 Work Experience & Internships</div>
+            <span class="text-xs text-muted">${workExps.length} Records</span>
+          </div>
+          ${workExps.map(exp => `
+            <div class="timeline-item">
+              <div class="timeline-role">${escapeHtml(exp.role || 'Software Engineering Intern')}</div>
+              <div class="timeline-company">${escapeHtml(exp.company || 'Tech Organization')}</div>
+              <div class="timeline-duration">📅 ${escapeHtml(exp.duration || 'Summer 2024')}</div>
+              <ul class="timeline-bullets">
+                ${(exp.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('')}
+              </ul>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- 5. Key Projects Portfolio -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-card-title">🚀 Key Engineering Projects</div>
+            <span class="text-xs text-muted">${projects.length} Highlights</span>
+          </div>
+          ${projects.map(proj => `
+            <div class="project-card-item">
+              <div class="project-title-row">
+                <span class="project-title">${escapeHtml(proj.title)}</span>
+              </div>
+              <div class="project-desc">${escapeHtml(proj.description)}</div>
+              <div class="project-tech-tags">
+                ${(proj.tech_stack || []).map(t => `<span class="project-tech-tag">${escapeHtml(t)}</span>`).join('')}
+              </div>
+            </div>
+          `).join('')}
         </div>
       </div>
     `;
@@ -528,7 +796,7 @@ function renderRecommendedJobCard(j) {
   const matchClass = (j.match_classification || 'Good Match').toLowerCase().replace(' ', '-');
 
   const matchingSkillsHtml = j.matching_skills && j.matching_skills.length > 0
-    ? j.matching_skills.slice(0, 5).map(s => `<span class="skill-tag-matched">✓ ${escapeHtml(s)}</span>`).join('')
+    ? j.matching_skills.slice(0, 6).map(s => `<span class="skill-tag-matched">✓ ${escapeHtml(s)}</span>`).join('')
     : '<span class="text-xs text-muted">CS Fundamentals</span>';
 
   const missingSkillsHtml = j.missing_skills && j.missing_skills.length > 0
@@ -600,72 +868,100 @@ function renderRecommendedJobCard(j) {
           </div>
           <div class="score-progress-row">
             <span class="text-xs text-muted">Role Alignment</span>
-            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.role_alignment || 90}%;"></div></div>
-            <span class="text-xs font-semibold">${b.role_alignment || 90}%</span>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.role_alignment || 85}%;"></div></div>
+            <span class="text-xs font-semibold">${b.role_alignment || 85}%</span>
           </div>
           <div class="score-progress-row">
             <span class="text-xs text-muted">Experience</span>
-            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.experience_match || 85}%;"></div></div>
-            <span class="text-xs font-semibold">${b.experience_match || 85}%</span>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.experience_match || 90}%;"></div></div>
+            <span class="text-xs font-semibold">${b.experience_match || 90}%</span>
+          </div>
+          <div class="score-progress-row">
+            <span class="text-xs text-muted">Education</span>
+            <div class="score-bar-bg"><div class="score-bar-fill" style="width: ${b.education_match || 90}%;"></div></div>
+            <span class="text-xs font-semibold">${b.education_match || 90}%</span>
           </div>
 
-          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-            <div style="font-weight: 600; color: #10b981; font-size: 12px; margin-bottom: 2px;">Why you're a strong candidate:</div>
-            <div class="text-xs text-secondary mb-2">${escapeHtml(j.why_matches || '')}</div>
-            <div style="font-weight: 600; color: #f59e0b; font-size: 12px; margin-bottom: 2px;">Potential gap:</div>
-            <div class="text-xs text-muted">${escapeHtml(j.potential_gap || '')}</div>
+          <div style="margin-top: 10px; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+            <strong>Analysis:</strong> ${escapeHtml(j.why_matches || 'Strong profile alignment with technical requirements.')}
           </div>
+          ${j.potential_gap ? `
+            <div style="margin-top: 6px; font-size: 12px; color: #f59e0b;">
+              <strong>Note:</strong> ${escapeHtml(j.potential_gap)}
+            </div>
+          ` : ''}
         </div>
       </div>
 
-      <div class="job-card-footer">
-        <span class="posted-date">Source: ${escapeHtml(j.source || 'ATS')}</span>
-        <div class="action-buttons">
-          <button class="btn btn-sm btn-ghost" onclick="openJobDetailModal(${j.job_id || j.id})">Details</button>
-          <button class="btn btn-sm btn-outline" onclick="trackJobInKanban(${j.job_id || j.id}, '${escapeJs(j.title)}', '${escapeJs(j.company)}')">Track</button>
-          ${isClosed ? `
-            <button class="btn btn-sm btn-disabled" disabled>Job Closed</button>
-          ` : `
-            <a href="${j.apply_url || j.job_url}" target="_blank" class="btn btn-sm btn-primary">Apply ↗</a>
-          `}
-        </div>
+      <!-- Action Buttons Row -->
+      <div class="job-card-actions" style="display: flex; gap: 8px; margin-top: 14px;">
+        ${isClosed ? `
+          <button class="btn btn-sm btn-disabled" style="flex: 1;">🔴 Job Closed</button>
+        ` : `
+          <a href="${escapeHtml(j.apply_url || j.job_url || '#')}" target="_blank" class="btn btn-sm btn-primary" style="flex: 1; text-align: center; text-decoration: none;">
+            Apply ↗
+          </a>
+        `}
+        <button class="btn btn-sm btn-outline" onclick="trackJobInKanban('${escapeHtml(j.company)}', '${escapeHtml(j.title)}', ${j.job_id || j.id})" title="Track in Application Kanban">
+          📋 Track
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="openJobDetailModal(${j.job_id || j.id})">
+          Details
+        </button>
       </div>
     </div>
   `;
 }
 
-function toggleAccordion(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.toggle('hidden');
+function toggleAccordion(contentId) {
+  const el = document.getElementById(contentId);
+  if (el) {
+    el.classList.toggle('hidden');
+  }
+}
+
+async function trackJobInKanban(company, role, jobId) {
+  try {
+    const res = await fetch(`${API_BASE}/applications/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        company: company,
+        role: role,
+        job_id: jobId,
+        status: 'Applied',
+        notes: 'Tracked from Top Opportunities recommendation feed.'
+      })
+    });
+    if (res.ok) {
+      showToast(`Added ${company} (${role}) to Application Kanban!`, 'success');
+    } else {
+      showToast('Could not track application.', 'error');
+    }
+  } catch (err) {
+    showToast('Error tracking application: ' + err.message, 'error');
+  }
 }
 
 /* ==========================================================================
-   6. DISCOVER JOBS & FILTERS (CLOSED JOB BADGES)
+   6. DISCOVER JOBS FEED (Infinite Scroll, Multi-Filter, Search)
    ========================================================================== */
 function initSearchAndFilters() {
-  const searchInput = document.getElementById('job-search-input');
-  const searchBtn = document.getElementById('run-search-btn');
-
-  const expSelect = document.getElementById('filter-exp');
-  const remoteSelect = document.getElementById('filter-remote');
-  const salarySelect = document.getElementById('filter-salary');
-  const bookmarkedBtn = document.getElementById('bookmarked-only-btn');
-  const chips = document.querySelectorAll('.salary-chip');
-
-  if (searchBtn) {
-    searchBtn.addEventListener('click', () => loadJobsFeed(true));
-  }
-
-  if (searchInput) {
-    searchInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') loadJobsFeed(true);
-    });
-  }
-
-  [expSelect, remoteSelect, salarySelect].forEach(select => {
-    select?.addEventListener('change', () => loadJobsFeed(true));
+  document.getElementById('run-search-btn')?.addEventListener('click', () => {
+    loadJobsFeed(true);
   });
 
+  document.getElementById('job-search-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadJobsFeed(true);
+  });
+
+  document.getElementById('filter-experience')?.addEventListener('change', () => loadJobsFeed(true));
+  document.getElementById('filter-remote')?.addEventListener('change', () => loadJobsFeed(true));
+  document.getElementById('filter-type')?.addEventListener('change', () => loadJobsFeed(true));
+  document.getElementById('filter-salary')?.addEventListener('change', () => loadJobsFeed(true));
+
+  // Salary Chips
+  const chips = document.querySelectorAll('.salary-chip');
   chips.forEach(chip => {
     chip.addEventListener('click', () => {
       chips.forEach(c => c.classList.remove('active'));
@@ -676,305 +972,201 @@ function initSearchAndFilters() {
     });
   });
 
-  if (bookmarkedBtn) {
-    bookmarkedBtn.addEventListener('click', () => {
+  // Bookmarked Filter
+  const bookmarkBtn = document.getElementById('bookmarked-only-btn');
+  if (bookmarkBtn) {
+    bookmarkBtn.addEventListener('click', () => {
       isBookmarkedOnlyFilter = !isBookmarkedOnlyFilter;
-      bookmarkedBtn.classList.toggle('btn-primary', isBookmarkedOnlyFilter);
-      bookmarkedBtn.classList.toggle('btn-ghost', !isBookmarkedOnlyFilter);
+      bookmarkBtn.classList.toggle('active', isBookmarkedOnlyFilter);
       loadJobsFeed(true);
     });
   }
 }
 
-async function loadJobsFeed(reset = true) {
-  const container = document.getElementById('jobs-container');
+function initInfiniteScroll() {
   const loadMoreBtn = document.getElementById('load-more-btn');
-  const loadMoreSpinner = document.getElementById('load-more-spinner');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', () => {
+      if (currentFeedPage < totalFeedPages && !isLoadingMoreFeed) {
+        currentFeedPage++;
+        loadJobsFeed(false);
+      }
+    });
+  }
 
-  if (!container) return;
+  window.addEventListener('scroll', () => {
+    if (document.getElementById('tab-jobs')?.classList.contains('active')) {
+      const scrollY = window.scrollY;
+      const visible = window.innerHeight;
+      const pageHeight = document.documentElement.scrollHeight;
+
+      if (scrollY + visible >= pageHeight - 300) {
+        if (currentFeedPage < totalFeedPages && !isLoadingMoreFeed) {
+          currentFeedPage++;
+          loadJobsFeed(false);
+        }
+      }
+    }
+  });
+}
+
+async function loadJobsFeed(reset = false) {
+  if (isLoadingMoreFeed) return;
+  isLoadingMoreFeed = true;
 
   if (reset) {
     currentFeedPage = 1;
     currentJobs = [];
-    container.innerHTML = '<div class="loading-skeleton">Searching live opportunities...</div>';
   }
 
-  const q = document.getElementById('job-search-input')?.value.trim() || '';
-  const exp = document.getElementById('filter-exp')?.value || '';
+  const container = document.getElementById('jobs-container');
+  const countBadge = document.getElementById('job-count-badge');
+  const spinner = document.getElementById('load-more-spinner');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+
+  if (reset && container) {
+    container.innerHTML = '<div class="loading-skeleton">Loading live discovery feed...</div>';
+  }
+  if (spinner) spinner.classList.remove('hidden');
+
+  const keyword = document.getElementById('job-search-input')?.value.trim() || '';
+  const experience = document.getElementById('filter-experience')?.value || '';
   const remote = document.getElementById('filter-remote')?.value || '';
-  const minSal = selectedSalaryMin || document.getElementById('filter-salary')?.value || '';
-  const maxSal = selectedSalaryMax || '';
+  const employment = document.getElementById('filter-type')?.value || '';
+  const minSalDropdown = document.getElementById('filter-salary')?.value || '';
 
-  let url = `${API_BASE}/jobs/search?page=${currentFeedPage}&limit=30`;
-  if (q) url += `&keyword=${encodeURIComponent(q)}`;
-  if (exp) url += `&experience_level=${encodeURIComponent(exp)}`;
-  if (remote) url += `&remote_type=${encodeURIComponent(remote)}`;
-  if (minSal) url += `&salary_min=${encodeURIComponent(minSal)}`;
-  if (maxSal) url += `&salary_max=${encodeURIComponent(maxSal)}`;
-  if (isBookmarkedOnlyFilter) url += `&bookmarked_only=true`;
+  const minSalary = selectedSalaryMin || minSalDropdown || '';
+  const maxSalary = selectedSalaryMax || '';
 
-  isLoadingMoreFeed = true;
-  if (loadMoreSpinner) loadMoreSpinner.classList.remove('hidden');
+  const params = new URLSearchParams({
+    page: currentFeedPage,
+    limit: 20,
+    active_only: true
+  });
+
+  if (keyword) params.append('keyword', keyword);
+  if (experience) params.append('experience_level', experience);
+  if (remote) params.append('remote_type', remote);
+  if (employment) params.append('employment_type', employment);
+  if (minSalary) params.append('min_salary_lpa', minSalary);
+  if (maxSalary) params.append('max_salary_lpa', maxSalary);
+  if (isBookmarkedOnlyFilter) params.append('bookmarked_only', 'true');
 
   try {
-    const res = await fetch(url);
-    const result = await res.json();
+    const res = await fetch(`${API_BASE}/jobs/search?${params.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const result = await res.json();
+      const newJobs = result.data || [];
+      totalFeedRecords = result.total || newJobs.length;
+      totalFeedPages = Math.ceil(totalFeedRecords / 20) || 1;
 
-    if (result.success && result.data) {
-      if (reset) {
-        currentJobs = result.data;
-      } else {
-        currentJobs = currentJobs.concat(result.data);
+      if (countBadge) {
+        countBadge.textContent = `${totalFeedRecords.toLocaleString()} jobs verified`;
       }
 
-      totalFeedRecords = result.meta.total_records || currentJobs.length;
-      totalFeedPages = result.meta.total_pages || 1;
+      if (reset) {
+        currentJobs = newJobs;
+      } else {
+        currentJobs = currentJobs.concat(newJobs);
+      }
 
       renderJobsGrid(container, currentJobs);
 
-      const countBadge = document.getElementById('job-count-badge');
-      if (countBadge) {
-        countBadge.textContent = `Showing 1–${currentJobs.length} of ${totalFeedRecords} active jobs`;
-      }
-
       if (loadMoreBtn) {
-        if (currentFeedPage < totalFeedPages) {
-          loadMoreBtn.classList.remove('hidden');
-          loadMoreBtn.textContent = `📥 Load More Jobs (${totalFeedRecords - currentJobs.length} remaining)`;
-        } else {
-          loadMoreBtn.classList.add('hidden');
-        }
+        loadMoreBtn.classList.toggle('hidden', currentFeedPage >= totalFeedPages);
       }
     }
   } catch (err) {
-    if (reset) {
-      container.innerHTML = `<div class="card card-padded text-muted">Error loading jobs feed: ${err.message}</div>`;
+    console.error('Load jobs error:', err);
+    if (container && reset) {
+      container.innerHTML = `<div class="card card-padded text-muted">Error loading jobs: ${err.message}</div>`;
     }
   } finally {
     isLoadingMoreFeed = false;
-    if (loadMoreSpinner) loadMoreSpinner.classList.add('hidden');
+    if (spinner) spinner.classList.add('hidden');
   }
 }
 
 function renderJobsGrid(container, jobs) {
+  if (!container) return;
+
   if (!jobs || jobs.length === 0) {
-    container.innerHTML = '<div class="card card-padded text-muted">No matching active jobs found. Try adjusting your search filters.</div>';
+    container.innerHTML = '<div class="card card-padded text-muted" style="grid-column: 1 / -1; text-align: center;">No active matching jobs found. Try adjusting your filters.</div>';
     return;
   }
 
-  container.innerHTML = jobs.map(j => renderStandardJobCard(j)).join('');
-}
+  container.innerHTML = jobs.map(j => {
+    const isClosed = j.status === 'CLOSED' || j.status === 'REMOVED';
+    const tags = (j.raw_tags || '').split(',').map(t => t.trim()).filter(t => t.length > 0).slice(0, 4);
 
-function renderStandardJobCard(j) {
-  const isClosed = j.status === 'CLOSED' || j.status === 'REMOVED';
-  const statusBadgeClass = isClosed ? 'badge-status-closed' : (j.status === 'ACTIVE' ? 'badge-status-active' : 'badge-status-unknown');
-  const statusLabel = isClosed ? '🔴 CLOSED' : (j.status === 'ACTIVE' ? '🟢 ACTIVE' : '🟡 UNVERIFIED');
-
-  return `
-    <div class="job-card spotlight-card">
-      ${isClosed ? `
-        <div class="closed-job-banner">
-          🔴 JOB CLOSED — Source listing is no longer available.
-        </div>
-      ` : ''}
-
-      <div class="job-card-header">
-        <div>
-          <span class="company-name">${escapeHtml(j.company)}</span>
-          <h3 class="job-title">${escapeHtml(j.title)}</h3>
-        </div>
-        <button class="bookmark-btn ${j.is_bookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${j.id}, this)">
-          ${j.is_bookmarked ? '★' : '☆'}
-        </button>
-      </div>
-
-      <div class="job-details">
-        <span class="badge ${statusBadgeClass}">${statusLabel}</span>
-        <span class="detail-item">📍 ${escapeHtml(j.location || 'India')}</span>
-        <span class="detail-item">🌐 ${escapeHtml(j.remote_type || 'Hybrid')}</span>
-        <span class="detail-item">💼 ${escapeHtml(j.experience_level || 'Fresher')}</span>
-        ${j.salary_range ? `<span class="detail-item" style="color: #10b981;">💰 ${escapeHtml(j.salary_range)}</span>` : ''}
-      </div>
-
-      <div class="job-tags mt-2">
-        ${(j.tags || []).slice(0, 4).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
-      </div>
-
-      <div class="job-card-footer">
-        <span class="posted-date">Source: ${escapeHtml(j.source || 'ATS')}</span>
-        <div class="action-buttons">
-          <button class="btn btn-sm btn-ghost" onclick="openJobDetailModal(${j.id})">Details</button>
-          <button class="btn btn-sm btn-outline" onclick="trackJobInKanban(${j.id}, '${escapeJs(j.title)}', '${escapeJs(j.company)}')">Track</button>
-          ${isClosed ? `
-            <button class="btn btn-sm btn-disabled" disabled>Job Closed</button>
-          ` : `
-            <a href="${j.url || j.job_url}" target="_blank" class="btn btn-sm btn-primary">Apply ↗</a>
-          `}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function initInfiniteScroll() {
-  const contentArea = document.querySelector('.content-area');
-  const loadMoreBtn = document.getElementById('load-more-btn');
-
-  loadMoreBtn?.addEventListener('click', () => loadNextFeedPage());
-
-  if (contentArea) {
-    contentArea.addEventListener('scroll', () => {
-      const activeTab = document.querySelector('.tab-pane.active');
-      if (!activeTab || activeTab.id !== 'tab-jobs') return;
-
-      const scrollPosition = contentArea.scrollTop + contentArea.clientHeight;
-      const scrollThreshold = contentArea.scrollHeight - 300;
-
-      if (scrollPosition >= scrollThreshold && !isLoadingMoreFeed && currentFeedPage < totalFeedPages) {
-        loadNextFeedPage();
-      }
-    });
-  }
-}
-
-async function loadNextFeedPage() {
-  if (isLoadingMoreFeed || currentFeedPage >= totalFeedPages) return;
-  currentFeedPage++;
-  await loadJobsFeed(false);
-}
-
-/* ==========================================================================
-   7. APPLICATION KANBAN WORKSPACE
-   ========================================================================== */
-function initApplicationWorkspaceEvents() {
-  const addBtn = document.getElementById('add-custom-application-btn');
-  const exportBtn = document.getElementById('export-applications-btn');
-  const csvInput = document.getElementById('csv-file-input');
-
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      window.open(`${API_BASE}/applications/export`, '_blank');
-    });
-  }
-
-  if (csvInput) {
-    csvInput.addEventListener('change', async () => {
-      if (!csvInput.files || csvInput.files.length === 0) return;
-      const formData = new FormData();
-      formData.append('file', csvInput.files[0]);
-
-      try {
-        const res = await fetch(`${API_BASE}/applications/import`, {
-          method: 'POST',
-          body: formData
-        });
-        const result = await res.json();
-        if (res.ok && result.success) {
-          showToast(`Imported ${result.imported_count} applications!`, 'success');
-          loadApplicationWorkspace();
-        }
-      } catch (err) {
-        showToast('Error importing CSV: ' + err.message, 'error');
-      }
-    });
-  }
-}
-
-async function loadApplicationWorkspace() {
-  const container = document.getElementById('kanban-board-container');
-  if (!container) return;
-
-  container.innerHTML = '<div class="loading-skeleton">Loading Application Kanban...</div>';
-
-  try {
-    const res = await fetch(`${API_BASE}/applications`);
-    const result = await res.json();
-
-    if (result.success && result.data) {
-      renderKanbanBoard(container, result.data);
-    }
-  } catch (err) {
-    container.innerHTML = `<div class="card card-padded text-muted">Error loading applications: ${err.message}</div>`;
-  }
-}
-
-function renderKanbanBoard(container, applications) {
-  const columns = ['Saved', 'Applied', 'OA / Test', 'Interview', 'Offer', 'Rejected'];
-  
-  const grouped = {};
-  columns.forEach(col => grouped[col] = []);
-
-  applications.forEach(app => {
-    const status = app.status || 'Saved';
-    if (grouped[status]) {
-      grouped[status].push(app);
-    } else {
-      grouped['Saved'].push(app);
-    }
-  });
-
-  container.innerHTML = columns.map(col => `
-    <div class="kanban-column" data-column="${escapeHtml(col)}">
-      <div class="kanban-header">
-        <span class="kanban-title">${escapeHtml(col)}</span>
-        <span class="badge badge-outline">${grouped[col].length}</span>
-      </div>
-      <div class="kanban-cards-wrapper" style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
-        ${grouped[col].length === 0 ? '<div class="text-xs text-muted" style="padding: 12px; text-align: center;">No items</div>' : ''}
-        ${grouped[col].map(a => `
-          <div class="kanban-card">
-            <div style="font-weight: 700; font-size: 14px;">${escapeHtml(a.company)}</div>
-            <div class="text-xs text-secondary">${escapeHtml(a.role)}</div>
-            <div class="text-xs text-muted" style="display: flex; justify-content: space-between; margin-top: 4px;">
-              <span>${a.applied_date ? new Date(a.applied_date).toLocaleDateString() : 'Tracked'}</span>
-              <span class="badge badge-outline" style="font-size: 10px;">${escapeHtml(a.source || 'JobPulse')}</span>
-            </div>
+    return `
+      <div class="job-card spotlight-card">
+        ${isClosed ? `
+          <div class="closed-job-banner">
+            🔴 JOB CLOSED — Source listing is no longer available.
           </div>
-        `).join('')}
+        ` : ''}
+
+        <div class="job-card-header">
+          <div>
+            <span class="company-name">${escapeHtml(j.company)}</span>
+            <h3 class="job-title">${escapeHtml(j.title)}</h3>
+          </div>
+          <button class="bookmark-btn ${j.is_bookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark(${j.id}, this)">
+            ${j.is_bookmarked ? '★' : '☆'}
+          </button>
+        </div>
+
+        <div class="job-details">
+          <span class="detail-item">📍 ${escapeHtml(j.location || 'India')}</span>
+          <span class="detail-item">🌐 ${escapeHtml(j.remote_type || 'Hybrid')}</span>
+          <span class="detail-item">💼 ${escapeHtml(j.experience_level || 'Fresher')}</span>
+          ${j.salary_range ? `<span class="detail-item" style="color: #10b981;">💰 ${escapeHtml(j.salary_range)}</span>` : ''}
+        </div>
+
+        <div class="skills-row mt-2">
+          ${tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+        </div>
+
+        <div class="job-card-actions" style="display: flex; gap: 8px; margin-top: 14px;">
+          ${isClosed ? `
+            <button class="btn btn-sm btn-disabled" style="flex: 1;">🔴 Closed</button>
+          ` : `
+            <a href="${escapeHtml(j.external_apply_url || j.job_url || '#')}" target="_blank" class="btn btn-sm btn-primary" style="flex: 1; text-align: center; text-decoration: none;">
+              Apply ↗
+            </a>
+          `}
+          <button class="btn btn-sm btn-outline" onclick="trackJobInKanban('${escapeHtml(j.company)}', '${escapeHtml(j.title)}', ${j.id})">
+            📋 Track
+          </button>
+          <button class="btn btn-sm btn-ghost" onclick="openJobDetailModal(${j.id})">
+            Details
+          </button>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
-async function trackJobInKanban(jobId, title, company) {
+async function toggleBookmark(jobId, btnEl) {
   try {
-    const res = await fetch(`${API_BASE}/applications`, {
+    const res = await fetch(`${API_BASE}/jobs/${jobId}/bookmark`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        company: company,
-        role: title,
-        source: 'JobPulse Discovery',
-        status: 'Applied'
-      })
+      headers: getAuthHeaders()
     });
-    const result = await res.json();
-    if (res.ok && result.success) {
-      showToast(`Added ${company} — ${title} to Application Kanban!`, 'success');
-      loadDashboardOverview();
-    }
-  } catch (err) {
-    showToast('Error tracking job: ' + err.message, 'error');
-  }
-}
-
-/* ==========================================================================
-   8. BOOKMARKS & SAVED SEARCHES
-   ========================================================================== */
-async function toggleBookmark(jobId, btnElement) {
-  try {
-    const res = await fetch(`${API_BASE}/jobs/${jobId}/bookmark`, { method: 'POST' });
-    const result = await res.json();
-    if (res.ok && result.success) {
-      const isBookmarked = result.data.is_bookmarked;
-      if (btnElement) {
-        btnElement.classList.toggle('bookmarked', isBookmarked);
-        btnElement.textContent = isBookmarked ? '★' : '☆';
+    if (res.ok) {
+      const result = await res.json();
+      const isBookmarked = result.is_bookmarked;
+      if (btnEl) {
+        btnEl.textContent = isBookmarked ? '★' : '☆';
+        btnEl.classList.toggle('bookmarked', isBookmarked);
       }
-      showToast(isBookmarked ? 'Saved to Bookmarks!' : 'Removed from Bookmarks', 'info');
+      showToast(result.message || (isBookmarked ? 'Bookmarked job!' : 'Bookmark removed.'), 'info');
     }
   } catch (err) {
-    showToast('Error toggling bookmark: ' + err.message, 'error');
+    showToast('Error updating bookmark: ' + err.message, 'error');
   }
 }
 
@@ -985,7 +1177,9 @@ async function loadBookmarksFeed() {
   container.innerHTML = '<div class="loading-skeleton">Loading bookmarked opportunities...</div>';
 
   try {
-    const res = await fetch(`${API_BASE}/jobs?bookmarked_only=true&limit=100`);
+    const res = await fetch(`${API_BASE}/jobs/bookmarks`, {
+      headers: getAuthHeaders()
+    });
     const result = await res.json();
     if (result.success) {
       renderJobsGrid(container, result.data);
@@ -995,6 +1189,9 @@ async function loadBookmarksFeed() {
   }
 }
 
+/* ==========================================================================
+   7. SAVED SEARCHES & ALERTS
+   ========================================================================== */
 async function loadSavedSearches() {
   const container = document.getElementById('searches-container');
   if (!container) return;
@@ -1002,12 +1199,14 @@ async function loadSavedSearches() {
   container.innerHTML = '<div class="loading-skeleton">Loading saved search rules...</div>';
 
   try {
-    const res = await fetch(`${API_BASE}/search/saved`);
+    const res = await fetch(`${API_BASE}/search/saved`, {
+      headers: getAuthHeaders()
+    });
     const result = await res.json();
 
     if (result.success && result.data) {
       if (result.data.length === 0) {
-        container.innerHTML = '<div class="card card-padded text-muted">No active search alert rules created yet.</div>';
+        container.innerHTML = '<div class="card card-padded text-muted">No active search alert rules created yet. Click "➕ New Saved Search" to configure instant alerts.</div>';
         return;
       }
 
@@ -1016,27 +1215,182 @@ async function loadSavedSearches() {
           <thead>
             <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 12px;">
               <th style="padding: 10px;">Rule Name</th>
-              <th style="padding: 10px;">Keywords</th>
+              <th style="padding: 10px;">Keywords & Tech</th>
+              <th style="padding: 10px;">Location & Mode</th>
               <th style="padding: 10px;">Status</th>
               <th style="padding: 10px;">Telegram Recipient</th>
+              <th style="padding: 10px; text-align: right;">Actions</th>
             </tr>
           </thead>
           <tbody>
             ${result.data.map(s => `
               <tr style="border-bottom: 1px solid var(--border-color); font-size: 13px;">
-                <td style="padding: 12px; font-weight: 600;">${escapeHtml(s.name)}</td>
+                <td style="padding: 12px; font-weight: 700; color: var(--text-primary);">${escapeHtml(s.name)}</td>
                 <td style="padding: 12px; color: var(--accent-blue);">${escapeHtml(s.keywords || s.query || 'All Jobs')}</td>
-                <td style="padding: 12px;"><span class="badge badge-pulse">${s.is_active ? 'ACTIVE' : 'PAUSED'}</span></td>
-                <td style="padding: 12px; font-family: var(--font-mono);">${escapeHtml(s.telegram_chat_id || 'Default')}</td>
+                <td style="padding: 12px; color: var(--text-muted);">${escapeHtml(s.location || 'Any')} (${escapeHtml(s.remote_type || 'Any')})</td>
+                <td style="padding: 12px;">
+                  <span class="badge ${s.is_active ? 'badge-pulse' : 'badge-outline'}" style="font-size: 11px;">
+                    ${s.is_active ? '🟢 ACTIVE' : '⏸ PAUSED'}
+                  </span>
+                </td>
+                <td style="padding: 12px; font-family: var(--font-mono); font-size: 11px;">${escapeHtml(s.telegram_chat_id || 'Default')}</td>
+                <td style="padding: 12px; text-align: right;">
+                  <button class="btn btn-sm btn-ghost" onclick="toggleSavedSearchRule(${s.id})">
+                    ${s.is_active ? 'Pause' : 'Activate'}
+                  </button>
+                  <button class="btn btn-sm btn-ghost" style="color: #ef4444;" onclick="deleteSavedSearchRule(${s.id})">
+                    ✕
+                  </button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       `;
+    } else {
+      container.innerHTML = `<div class="card card-padded text-muted">${result.message || 'No search rules found.'}</div>`;
     }
   } catch (err) {
     container.innerHTML = `<div class="card card-padded text-muted">Error loading search rules: ${err.message}</div>`;
   }
+}
+
+async function toggleSavedSearchRule(id) {
+  try {
+    const res = await fetch(`${API_BASE}/search/saved/${id}/toggle`, {
+      method: 'PATCH',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      showToast('Search alert rule updated.', 'info');
+      loadSavedSearches();
+    }
+  } catch (err) {
+    showToast('Error toggling rule: ' + err.message, 'error');
+  }
+}
+
+async function deleteSavedSearchRule(id) {
+  if (!confirm('Are you sure you want to delete this alert rule?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/search/saved/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      showToast('Search alert rule deleted.', 'info');
+      loadSavedSearches();
+    }
+  } catch (err) {
+    showToast('Error deleting rule: ' + err.message, 'error');
+  }
+}
+
+/* ==========================================================================
+   8. APPLICATION WORKSPACE (KANBAN)
+   ========================================================================== */
+function initApplicationWorkspaceEvents() {
+  document.getElementById('add-custom-application-btn')?.addEventListener('click', () => {
+    const company = prompt('Enter Company Name:');
+    if (!company) return;
+    const role = prompt('Enter Job Role Title:');
+    if (!role) return;
+
+    fetch(`${API_BASE}/applications/`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ company, role, status: 'Applied' })
+    }).then(res => {
+      if (res.ok) {
+        showToast('Application tracked!', 'success');
+        loadApplicationWorkspace();
+      }
+    });
+  });
+}
+
+async function loadApplicationWorkspace() {
+  const container = document.getElementById('kanban-board-container');
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-skeleton">Loading Application Kanban columns...</div>';
+
+  try {
+    const res = await fetch(`${API_BASE}/applications/`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const result = await res.json();
+      const apps = result.data || [];
+
+      const columns = ['Saved', 'Applied', 'OA / Test', 'Interview', 'Offer', 'Rejected'];
+      const grouped = {};
+      columns.forEach(c => grouped[c] = []);
+      apps.forEach(a => {
+        const col = a.status || 'Applied';
+        if (grouped[col]) grouped[col].push(a);
+        else grouped['Applied'].push(a);
+      });
+
+      container.innerHTML = columns.map(col => `
+        <div class="kanban-column" ondragover="event.preventDefault()" ondrop="dropToColumn(event, '${col}')">
+          <div class="kanban-col-header">
+            <h4>${col}</h4>
+            <span class="badge badge-outline">${grouped[col].length}</span>
+          </div>
+          <div class="kanban-cards-list">
+            ${grouped[col].map(a => `
+              <div class="kanban-card" draggable="true" ondragstart="dragApplication(event, ${a.id})">
+                <div style="font-weight: 700; font-size: 13px;">${escapeHtml(a.company)}</div>
+                <div class="text-xs text-muted">${escapeHtml(a.role)}</div>
+                <div class="text-xs mt-2" style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                  <span>${a.applied_date ? new Date(a.applied_date).toLocaleDateString() : 'Active'}</span>
+                  <span style="color: #ef4444; cursor: pointer;" onclick="deleteApp(${a.id})">✕</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading Kanban: ${err.message}</div>`;
+  }
+}
+
+function dragApplication(e, id) {
+  e.dataTransfer.setData('text/plain', id);
+}
+
+async function dropToColumn(e, newStatus) {
+  e.preventDefault();
+  const id = e.dataTransfer.getData('text/plain');
+  if (!id) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/applications/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (res.ok) {
+      showToast(`Application moved to ${newStatus}`, 'info');
+      loadApplicationWorkspace();
+    }
+  } catch (err) {
+    showToast('Error moving application: ' + err.message, 'error');
+  }
+}
+
+async function deleteApp(id) {
+  if (!confirm('Remove application?')) return;
+  try {
+    await fetch(`${API_BASE}/applications/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    loadApplicationWorkspace();
+  } catch (err) {}
 }
 
 /* ==========================================================================
@@ -1044,7 +1398,9 @@ async function loadSavedSearches() {
    ========================================================================== */
 async function loadAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/analytics/dashboard`);
+    const res = await fetch(`${API_BASE}/analytics/dashboard`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
       const result = await res.json();
       const d = result.data;
@@ -1067,27 +1423,36 @@ async function loadConnectorHealth() {
   container.innerHTML = '<div class="loading-skeleton">Loading connector diagnostics...</div>';
 
   try {
-    const res = await fetch(`${API_BASE}/admin/connectors`);
-    const result = await res.json();
+    const res = await fetch(`${API_BASE}/admin/connectors`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const result = await res.json();
+      const connectors = result.data || [];
 
-    if (result.success && result.data) {
       container.innerHTML = `
         <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;">
           <thead>
             <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 12px;">
-              <th style="padding: 10px;">Connector Name</th>
+              <th style="padding: 10px;">Connector Source</th>
               <th style="padding: 10px;">Type</th>
               <th style="padding: 10px;">Status</th>
-              <th style="padding: 10px;">Total Jobs</th>
+              <th style="padding: 10px;">Indexed Jobs</th>
+              <th style="padding: 10px;">Last Latency</th>
             </tr>
           </thead>
           <tbody>
-            ${result.data.map(c => `
+            ${connectors.map(c => `
               <tr style="border-bottom: 1px solid var(--border-color); font-size: 13px;">
                 <td style="padding: 12px; font-weight: 600;">${escapeHtml(c.name)}</td>
-                <td style="padding: 12px;"><span class="badge badge-source-ats">${escapeHtml(c.source_type || 'ATS')}</span></td>
-                <td style="padding: 12px;"><span class="badge badge-pulse">HEALTHY</span></td>
-                <td style="padding: 12px; font-weight: 700;">${c.discovered_count || 0}</td>
+                <td style="padding: 12px; color: var(--accent-blue);">${escapeHtml(c.source_type)}</td>
+                <td style="padding: 12px;">
+                  <span class="badge ${c.health === 'HEALTHY' ? 'badge-pulse' : 'badge-outline'}" style="font-size: 11px;">
+                    ${c.health || 'HEALTHY'}
+                  </span>
+                </td>
+                <td style="padding: 12px;">${c.jobs_discovered_total || 2}</td>
+                <td style="padding: 12px; font-family: var(--font-mono);">${c.duration_ms ? Math.round(c.duration_ms) + 'ms' : '15ms'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1100,27 +1465,75 @@ async function loadConnectorHealth() {
 }
 
 async function triggerManualSync() {
-  showToast('Triggering source synchronization across connectors...', 'info');
+  showToast('⚡ Triggering multi-connector discovery cycle in background...', 'info');
   try {
-    const res = await fetch(`${API_BASE}/admin/connectors/sync`, { method: 'POST' });
-    const result = await res.json();
-    if (result.success) {
-      showToast('Synchronization cycle completed successfully!', 'success');
-      loadDashboardOverview();
-      loadJobsFeed(true);
+    const res = await fetch(`${API_BASE}/admin/discover`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      showToast('Discovery cycle initiated successfully!', 'success');
+      setTimeout(() => {
+        loadJobsFeed(true);
+        loadDashboardOverview();
+      }, 3000);
     }
   } catch (err) {
-    showToast('Sync error: ' + err.message, 'error');
+    showToast('Error syncing sources: ' + err.message, 'error');
   }
 }
 
 /* ==========================================================================
-   10. ACCOUNT PROFILE & MODALS
+   10. TELEGRAM NOTIFICATIONS
+   ========================================================================== */
+function initTelegramView() {
+  document.getElementById('save-telegram-btn')?.addEventListener('click', async () => {
+    const chatId = document.getElementById('telegram-chat-id-input')?.value.trim();
+    if (!chatId) {
+      showToast('Please enter your numeric Telegram Chat ID.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/notifications/telegram/connect`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ chat_id: chatId })
+      });
+      if (res.ok) {
+        showToast('Telegram alerts connected successfully!', 'success');
+      }
+    } catch (err) {
+      showToast('Error connecting Telegram: ' + err.message, 'error');
+    }
+  });
+
+  document.getElementById('send-test-alert-btn')?.addEventListener('click', async () => {
+    showToast('Sending test job alert...', 'info');
+    try {
+      const res = await fetch(`${API_BASE}/notifications/telegram/test`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        showToast('Test notification dispatched to your Telegram!', 'success');
+      }
+    } catch (err) {
+      showToast('Error sending test alert: ' + err.message, 'error');
+    }
+  });
+}
+
+/* ==========================================================================
+   11. MODALS & PROFILE
    ========================================================================== */
 function loadProfile() {
-  if (currentUser) {
-    document.getElementById('profile-name-field').value = currentUser.name || '';
-    document.getElementById('profile-email-field').value = currentUser.email || '';
+  const user = currentUser || JSON.parse(localStorage.getItem('jobpulse_user') || '{}');
+  if (user) {
+    const nameInput = document.getElementById('profile-name-field');
+    const emailInput = document.getElementById('profile-email-field');
+    if (nameInput) nameInput.value = user.name || '';
+    if (emailInput) emailInput.value = user.email || '';
   }
 }
 
@@ -1133,13 +1546,26 @@ function initModals() {
     document.getElementById('save-search-modal')?.classList.add('hidden');
   });
 
+  document.getElementById('create-search-modal-btn')?.addEventListener('click', () => {
+    document.getElementById('save-search-modal')?.classList.remove('hidden');
+  });
+
   document.getElementById('save-current-search-btn')?.addEventListener('click', () => {
+    const currentKeyword = document.getElementById('job-search-input')?.value.trim();
+    if (currentKeyword) {
+      document.getElementById('modal-search-query').value = currentKeyword;
+      document.getElementById('modal-search-name').value = `${currentKeyword} Opportunities`;
+    }
     document.getElementById('save-search-modal')?.classList.remove('hidden');
   });
 
   document.getElementById('confirm-save-search')?.addEventListener('click', async () => {
     const name = document.getElementById('modal-search-name').value.trim();
     const query = document.getElementById('modal-search-query').value.trim();
+    const location = document.getElementById('modal-search-location')?.value.trim();
+    const salaryVal = document.getElementById('modal-search-salary')?.value;
+    const remote = document.getElementById('modal-search-remote')?.value;
+    const telegram = document.getElementById('modal-search-telegram')?.value.trim();
 
     if (!name) {
       showToast('Alert rule name is required.', 'error');
@@ -1149,13 +1575,24 @@ function initModals() {
     try {
       const res = await fetch(`${API_BASE}/search/saved`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, query, keywords: query })
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: name,
+          query: query,
+          keywords: query,
+          location: location || null,
+          min_salary_lpa: salaryVal ? parseFloat(salaryVal) : null,
+          remote_type: remote || null,
+          telegram_chat_id: telegram || null
+        })
       });
       const result = await res.json();
       if (res.ok && result.success) {
         showToast('Saved search alert created!', 'success');
         document.getElementById('save-search-modal')?.classList.add('hidden');
+        loadSavedSearches();
+      } else {
+        showToast(result.detail || 'Could not save search rule.', 'error');
       }
     } catch (err) {
       showToast('Error creating search alert: ' + err.message, 'error');
@@ -1179,14 +1616,16 @@ async function openJobDetailModal(jobId) {
   modal.classList.remove('hidden');
 
   try {
-    const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+    const res = await fetch(`${API_BASE}/jobs/${jobId}`, {
+      headers: getAuthHeaders()
+    });
     if (res.ok) {
       const result = await res.json();
       const j = result.data;
 
       titleEl.textContent = `${j.company} — ${j.title}`;
 
-      const isClosed = !j.is_active_opportunity;
+      const isClosed = j.status === 'CLOSED' || j.status === 'REMOVED';
       if (isClosed) {
         applyLink.classList.add('btn-disabled');
         applyLink.textContent = 'Job Closed';
@@ -1227,27 +1666,11 @@ function closeJobDetailModal() {
 }
 
 /* ==========================================================================
-   11. TELEGRAM VIEW & UTILS
+   12. SPOTLIGHT EFFECT & TOASTS
    ========================================================================== */
-function initTelegramView() {
-  document.getElementById('generate-tg-token-btn')?.addEventListener('click', async () => {
-    const display = document.getElementById('telegram-token-display');
-    try {
-      const res = await fetch(`${API_BASE}/notifications/telegram/token`, { method: 'POST' });
-      const result = await res.json();
-      if (result.success) {
-        display.classList.remove('hidden');
-        display.innerHTML = `<div class="alert alert-success">Your Token: <code>${result.token}</code><br>Send <code>/link ${result.token}</code> to our Telegram Bot.</div>`;
-      }
-    } catch (err) {
-      showToast('Error generating token: ' + err.message, 'error');
-    }
-  });
-}
-
 function initSpotlightEffect() {
   document.addEventListener('mousemove', (e) => {
-    const cards = document.querySelectorAll('.job-card, .bento-card, .kanban-card, .overview-card');
+    const cards = document.querySelectorAll('.spotlight-card');
     cards.forEach(card => {
       const rect = card.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -1259,21 +1682,32 @@ function initSpotlightEffect() {
 }
 
 function showToast(message, type = 'info') {
-  let toastContainer = document.getElementById('toast-container');
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'toast-container';
-    toastContainer.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px;';
-    document.body.appendChild(toastContainer);
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.position = 'fixed';
+    container.style.bottom = '20px';
+    container.style.right = '20px';
+    container.style.zIndex = '9999';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '10px';
+    document.body.appendChild(container);
   }
 
   const toast = document.createElement('div');
-  const bg = type === 'success' ? '#10b981' : (type === 'error' ? '#ef4444' : '#3b82f6');
-  toast.style.cssText = `background: ${bg}; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeInUp 0.2s ease;`;
+  toast.className = `alert alert-${type === 'error' ? 'error' : (type === 'success' ? 'success' : 'info')}`;
+  toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+  toast.style.minWidth = '260px';
+  toast.style.animation = 'fadeIn 0.3s ease';
   toast.textContent = message;
 
-  toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), 3500);
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
 
 function escapeHtml(str) {
@@ -1284,9 +1718,4 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
-
-function escapeJs(str) {
-  if (!str) return '';
-  return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
 }

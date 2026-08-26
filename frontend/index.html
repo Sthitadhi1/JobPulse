@@ -201,39 +201,39 @@
 
           <!-- 4 Stat Overview Cards -->
           <div class="dashboard-overview-grid">
-            <div class="overview-card">
+            <div class="overview-card clickable nav-switch-link" data-switch-tab="jobs" title="Click to browse all active jobs">
               <div class="overview-icon-box icon-box-blue">💼</div>
               <div class="overview-info">
                 <span id="dash-stat-active-jobs" class="overview-number">1,233</span>
                 <span class="overview-label">Active Jobs</span>
-                <span class="overview-status-text">🟢 Verified & Live</span>
+                <span class="overview-status-text">🟢 Click to Discover Jobs →</span>
               </div>
             </div>
 
-            <div class="overview-card">
+            <div class="overview-card clickable nav-switch-link" data-switch-tab="resume-match" title="Click to view tailored job recommendations">
               <div class="overview-icon-box icon-box-green">🎯</div>
               <div class="overview-info">
                 <span id="dash-stat-top-matches" class="overview-number">30</span>
                 <span class="overview-label">Top Matches</span>
-                <span class="overview-status-text">🎯 For Your Profile</span>
+                <span class="overview-status-text">🎯 For Your Profile →</span>
               </div>
             </div>
 
-            <div class="overview-card">
+            <div class="overview-card clickable nav-switch-link" data-switch-tab="applications" title="Click to view Application Kanban">
               <div class="overview-icon-box icon-box-purple">📄</div>
               <div class="overview-info">
                 <span id="dash-stat-applications" class="overview-number">8</span>
                 <span class="overview-label">Applications</span>
-                <span class="overview-status-text">📄 In Progress</span>
+                <span class="overview-status-text">📄 In Progress →</span>
               </div>
             </div>
 
-            <div class="overview-card">
+            <div class="overview-card clickable nav-switch-link" data-switch-tab="bookmarks" title="Click to view Bookmarked Jobs">
               <div class="overview-icon-box icon-box-amber">⭐</div>
               <div class="overview-info">
                 <span id="dash-stat-bookmarked" class="overview-number">12</span>
                 <span class="overview-label">Bookmarked Jobs</span>
-                <span class="overview-status-text">⭐ Saved Jobs</span>
+                <span class="overview-status-text">⭐ Saved Jobs →</span>
               </div>
             </div>
           </div>
@@ -644,20 +644,44 @@
        ========================================================================== -->
   <!-- Save Search Modal -->
   <div id="save-search-modal" class="modal-overlay hidden">
-    <div class="modal-card">
+    <div class="modal-card max-w-md">
       <div class="modal-header">
         <h3>Create Automated Search Alert</h3>
         <button id="close-modal-btn" class="btn btn-ghost btn-sm">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>Alert Rule Name:</label>
-          <input type="text" id="modal-search-name" class="input-field" placeholder="e.g. SDE 1 Backend Jobs">
+          <label>Alert Rule Name <span style="color: #ef4444;">*</span></label>
+          <input type="text" id="modal-search-name" class="input-field" placeholder="e.g. SDE 1 Backend Jobs" required>
         </div>
         <div class="form-group">
-          <label>Query Keywords:</label>
-          <input type="text" id="modal-search-query" class="input-field" placeholder="e.g. Backend AND Python">
+          <label>Keywords / Technologies</label>
+          <input type="text" id="modal-search-query" class="input-field" placeholder="e.g. Python, FastAPI, Docker, ML">
         </div>
+        <div class="form-group">
+          <label>Target Location</label>
+          <input type="text" id="modal-search-location" class="input-field" placeholder="e.g. Bengaluru, Hyderabad, Remote">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Min Salary (LPA)</label>
+            <input type="number" id="modal-search-salary" class="input-field" placeholder="e.g. 10" step="0.5">
+          </div>
+          <div class="form-group">
+            <label>Work Mode</label>
+            <select id="modal-search-remote" class="input-field">
+              <option value="">Any Mode</option>
+              <option value="Remote">Remote Only</option>
+              <option value="Hybrid">Hybrid</option>
+              <option value="On-site">On-site</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Telegram Recipient Chat ID (Optional)</label>
+          <input type="text" id="modal-search-telegram" class="input-field" placeholder="e.g. 123456789 (or leave blank for default)">
+        </div>
+        <div id="save-search-msg" class="alert hidden"></div>
       </div>
       <div class="modal-footer">
         <button id="cancel-save-search" class="btn btn-ghost">Cancel</button>
@@ -681,25 +705,50 @@
     </div>
   </div>
 
-  <!-- Forgot Password Modal -->
+  <!-- Forgot & Reset Password Modal -->
   <div id="forgot-password-modal" class="modal-overlay hidden">
     <div class="modal-card max-w-md">
       <div class="modal-header">
-        <h3>Forgot Password</h3>
+        <h3 id="forgot-modal-title">Reset Password</h3>
         <button id="close-forgot-modal" class="btn btn-ghost btn-sm">✕</button>
       </div>
-      <div class="modal-body">
-        <p class="text-sm text-muted">Enter your email address to receive a password reset link:</p>
+      
+      <!-- Step 1: Request Code -->
+      <div id="forgot-step-1" class="modal-body">
+        <p class="text-sm text-muted">Enter your registered email address to receive your password reset verification code:</p>
         <div class="form-group mt-3">
-          <label>Email Address:</label>
-          <input type="email" id="forgot-email-input" class="input-field" placeholder="name@example.com">
+          <label>Registered Email Address:</label>
+          <input type="email" id="forgot-email-input" class="input-field" placeholder="name@example.com" required>
         </div>
         <div id="forgot-error-msg" class="alert hidden"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button id="cancel-forgot" class="btn btn-ghost">Cancel</button>
+          <button id="submit-forgot-btn" class="btn btn-primary">Get Reset Code</button>
+        </div>
       </div>
-      <div class="modal-footer">
-        <button id="cancel-forgot" class="btn btn-ghost">Cancel</button>
-        <button id="submit-forgot-btn" class="btn btn-primary">Send Reset Link</button>
+
+      <!-- Step 2: Enter Code & New Password -->
+      <div id="forgot-step-2" class="modal-body hidden">
+        <p class="text-sm text-muted" id="forgot-step2-sub">Enter the 6-digit reset code and your new password:</p>
+        <div class="form-group mt-2">
+          <label>6-Digit Reset Code:</label>
+          <input type="text" id="reset-otp-input" class="input-field" placeholder="123456" maxlength="6" style="letter-spacing: 4px; font-size: 18px; font-weight: 700; text-align: center;">
+        </div>
+        <div class="form-group">
+          <label>New Password (Min 6 chars):</label>
+          <input type="password" id="reset-new-password" class="input-field" placeholder="••••••••" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm New Password:</label>
+          <input type="password" id="reset-confirm-password" class="input-field" placeholder="••••••••" required>
+        </div>
+        <div id="reset-otp-msg" class="alert hidden"></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+          <button id="back-to-forgot-step1" class="btn btn-ghost btn-sm">← Back</button>
+          <button id="submit-reset-otp-btn" class="btn btn-primary">Update Password & Log In</button>
+        </div>
       </div>
+
     </div>
   </div>
 

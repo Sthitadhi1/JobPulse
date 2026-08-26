@@ -1337,35 +1337,252 @@ body {
   color: var(--text-muted) !important;
 }
 
+.overview-card.clickable {
+  cursor: pointer;
+}
+
+.overview-card.clickable:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-blue);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+}
+
+/* ==========================================================================
+   CANDIDATE RESUME PROFILE BENTO GRID
+   ========================================================================== */
+.candidate-bento-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.candidate-profile-hero {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.candidate-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.candidate-large-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+}
+
+.candidate-hero-meta h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.candidate-hero-contacts {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.candidate-hero-roles {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.role-pill {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bento-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.bento-card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.bento-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.bento-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skills-badge-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-pill-ranked {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.skill-pill-ranked:hover {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.skill-pill-lang { border-color: rgba(59, 130, 246, 0.4); color: #60a5fa; }
+.skill-pill-framework { border-color: rgba(16, 185, 129, 0.4); color: #34d399; }
+.skill-pill-db { border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+.skill-pill-cloud { border-color: rgba(168, 85, 247, 0.4); color: #c084fc; }
+.skill-pill-ml { border-color: rgba(236, 72, 153, 0.4); color: #f472b6; }
+.skill-pill-core { border-color: rgba(148, 163, 184, 0.4); color: #cbd5e1; }
+
+.timeline-item {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 16px;
+  border-left: 2px solid var(--border-color);
+}
+
+.timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+}
+
+.timeline-role {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.timeline-company {
+  font-size: 13px;
+  color: var(--accent-blue);
+  margin-bottom: 4px;
+}
+
+.timeline-duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.timeline-bullets {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-left: 16px;
+  margin: 0;
+}
+
+.project-card-item {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.project-card-item:last-child {
+  margin-bottom: 0;
+}
+
+.project-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.project-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.project-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.project-tech-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.project-tech-tag {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
 /* RESPONSIVE BREAKPOINTS */
 @media (max-width: 1024px) {
-  .dashboard-overview-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .dashboard-main-grid {
+  .candidate-bento-grid {
     grid-template-columns: 1fr;
-  }
-  .pipeline-container {
-    flex-direction: column;
   }
 }
 
-@media (max-width: 768px) {
-  .sidebar {
-    width: 60px;
-    padding: 12px 6px;
-  }
-  .nav-item span {
-    display: none;
-  }
-  .sidebar-footer span {
-    display: none;
-  }
-  .dashboard-overview-grid {
-    grid-template-columns: 1fr;
-  }
-  .top-header {
-    padding: 10px 14px;
-  }
-}
 

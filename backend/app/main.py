@@ -137,4 +137,15 @@ if os.path.exists(frontend_dir):
 async def root():
     return RedirectResponse(url="/dashboard/", status_code=307)
 
+@app.get("/api/v1/health")
+@app.get("/ping")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "JobPulse",
+        "timestamp": os.getenv("RENDER_GIT_COMMIT", "live"),
+        "scheduler_enabled": settings.ENABLE_SCHEDULER
+    }
+
+
 
