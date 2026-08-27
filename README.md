@@ -2,22 +2,21 @@
 
 # 🚀 JobPulse
 
-### The Open-Source Intelligent Job Discovery Platform
+### The Open-Source Intelligent Job Discovery & Career Operating System
 
-*Monitor hundreds of company career pages, ATS platforms, and job boards in real-time to discover newly posted technical opportunities.*
+*Continuously monitor 300+ company career pages, 12+ ATS platforms, and job sources in real-time. Discover verified tech opportunities, match resumes with AI-driven scoring, and track applications with a Kanban workspace.*
 
-![GitHub stars](https://img.shields.io/github/stars/Sthitadhi1/JobPulse?style=for-the-badge&color=gold)
-![GitHub forks](https://img.shields.io/github/forks/Sthitadhi1/JobPulse?style=for-the-badge&color=blue)
-![GitHub issues](https://img.shields.io/github/issues/Sthitadhi1/JobPulse?style=for-the-badge&color=red)
-![Python](https://img.shields.io/badge/Python-3.12+-blue?style=for-the-badge&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/React-Frontend-61DAFB?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?style=for-the-badge&logo=typescript)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=for-the-badge&logo=postgresql)
-![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
+[![GitHub stars](https://img.shields.io/github/stars/Sthitadhi1/JobPulse?style=for-the-badge&color=gold)](https://github.com/Sthitadhi1/JobPulse/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Sthitadhi1/JobPulse?style=for-the-badge&color=blue)](https://github.com/Sthitadhi1/JobPulse/network)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge&logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-AsyncIO-red?style=for-the-badge&logo=sqlalchemy)](https://www.sqlalchemy.org/)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-**Built to help students, fresh graduates, and professionals discover new technical job opportunities before everyone else.**
+**Built for students, new graduates, and software engineers to discover genuine technical opportunities before they get crowded.**
+
+[Live Demo](https://jobpulse-2z2f.onrender.com) • [Report Bug](https://github.com/Sthitadhi1/JobPulse/issues) • [Request Feature](https://github.com/Sthitadhi1/JobPulse/issues)
 
 </div>
 
@@ -25,187 +24,108 @@
 
 # 📊 Project at a Glance
 
-| Metric | Current | Target Scale |
-|:-------|:-------:|:------------:|
-| 🏢 **Company Registry** | **300+ companies** | 1,000+ companies |
-| 🔌 **Supported Sources** | Career Pages, LinkedIn, Naukri, ATS Portals | Unlimited Plugin Connectors |
-| ⚙️ **ATS Integrations** | **12+ Platforms** (Greenhouse, Lever, Workday, Ashby, etc.) | 20+ Platforms |
-| 🔍 **Search Filters** | **15+ Criteria** | 30+ Criteria |
-| 🎯 **Experience Levels** | **14 Categories** (`Internship` ➔ `Fellow`) | Custom Taxonomy |
-| 📨 **Notification Channels** | **Telegram** (Live) | Email, Push, Slack, Discord |
-| 🗄️ **Database Architecture** | **PostgreSQL** / Async SQLAlchemy | Multi-Region Sharded DB |
-| 🧩 **System Design** | **Plugin-Based Connector Framework** | Distributed Worker Mesh |
-| 🚀 **Backend** | **FastAPI** (Async AsyncIO Engine) | Production Ready |
-| 💻 Frontend | **React + TypeScript / Modern UI** | Production Ready |
-| 🐳 Deployment | **Docker Compose & CI/CD** | Kubernetes-Ready |
+| Pillar | Current Architecture | Capabilities |
+|:-------|:---------------------|:-------------|
+| 🏢 **Company Registry** | **300+ Curated Companies** | Product Giants, Indian Unicorns, Global IT & Consulting |
+| 🔌 **ATS Integrations** | **12+ Platforms** | Greenhouse, Lever, Workday, Ashby, SmartRecruiters, Teamtailor, Recruitee, Taleo, SuccessFactors, etc. |
+| 🧠 **AI Resume Matcher** | **Multi-Section Intelligence** | Extracts Education, 25+ Ranked Skills, Experience & Projects; calculates 7-part weighted match scores |
+| 📋 **Application Workspace** | **Kanban Board + CSV Sync** | Drag-and-drop status pipeline (`Saved` ➔ `Applied` ➔ `OA` ➔ `Interview` ➔ `Offer`) |
+| 🟢 **Verification Engine** | **Continuous Lifecycle Guard** | Re-verifies career links; badges live vs expired/closed postings; prevents 404 dead links |
+| 🔍 **Discovery & Search** | **Multi-Filter Boolean Engine** | Title, Skills, Salary Chips, Remote Mode, 14 Experience Categories |
+| 📨 **Alert Dispatcher** | **Telegram Bot Integration** | Automated real-time notifications for custom saved search alerts |
+| 🔄 **CI/CD Automation** | **GitHub Actions Crawler** | Automated crawler every 2 hours + 24/7 Render keep-alive health pinger |
+| 🐳 **Deployment Ready** | **Containerized Production** | Docker Compose, Render PaaS (`render.yaml`), Uvicorn async backend |
 
 ---
 
-# 🚀 Highlights
+# 🚀 Key Features
 
-- 🏢 **300+ Curated Companies**: Fully populated registry across Product Giants, Indian Unicorns/Startups, and IT Services/Consulting firms.
-- 🔌 **12+ ATS & Platform Connectors**: Native support for Greenhouse, Lever, Workday, Ashby, SmartRecruiters, Teamtailor, Recruitee, Jobvite, Oracle Taleo, SAP SuccessFactors, LinkedIn Jobs, and Naukri.
-- 🌐 **Direct Career Page Ingestion**: Direct ingestion from employer hiring portals prioritized over stale third-party aggregators.
-- 🎯 **Weighted Experience Classification**: Multi-signal classification engine with strict guardrails preventing 1–3 YOE roles from misclassification as Freshers.
-- 🟢 **Continuous Job Verification Engine**: Multi-cycle revalidation displaying real-time badges (🟢 Verified Today, 🟡 Verification Pending, 🔴 Removed from Source).
-- 🔗 **Smart Apply Link Resolution**: Priority URL fallback (`external_apply_url` ➔ `job_url`) preventing generic career homepage redirects.
-- 📊 **Real-Time Analytics Telemetry**: Comprehensive hiring trends, daily fresher postings, top hiring skills, and connector health metrics.
-- ⚡ **Zero-Code Company Onboarding**: Configuration-driven JSON/DB registry allowing new companies to be onboarded without code modification.
-- 🐳 **Docker & Production Ready**: Fully containerized environment with async SQLAlchemy database migrations and automated test suites.
+### 1. 🔍 Direct ATS & Career Portal Ingestion
+- Ingests opportunities directly from official employer career portals (Greenhouse, Lever, Ashby, Workday, SmartRecruiters, LinkedIn Jobs, etc.), bypassing stale third-party scrapers.
+- **Smart Link Resolution**: Fallback architecture (`external_apply_url` ➔ `job_url` ➔ `career_url`) guarantees users are directed to the exact job requisition rather than generic homepages.
 
----
+### 2. 🧠 Multi-Section AI Resume Intelligence Engine
+- **Universal Multi-Section Parser**: Dynamically extracts candidates' **Education** (Degree, University, Target Graduation Year, GPA), **Top 15–25 Ranked Technical Skills**, **Work Experience & Internships**, and **Project Portfolios** from PDF and DOCX files.
+- **Granular 7-Part Weighted Match Scoring**:
+  - 🛠️ **Skill Overlap (35%)**: Dynamic keyword matching across 100+ technical frameworks.
+  - 💼 **Experience Seniority (20%)**: Matches junior/intern vs mid/senior roles with strict guardrails.
+  - 🎯 **Role Domain Fit (15%)**: Categorizes roles (AI/ML, Backend, Full Stack, DevOps, Data).
+  - 🎓 **Education Fit (10%)**: Degree level and academic background relevance.
+  - 🚀 **Projects Alignment (10%)**: Evaluates project tech stack relevance against job requirements.
+  - 📍 **Location / Work Mode (5%)** & 💰 **Salary Range (5%)**.
 
-# 📖 Overview
+### 3. 📋 Interactive Application Kanban Workspace
+- Visual drag-and-drop Kanban board managing stages: `Saved`, `Applied`, `OA / Test`, `Interview`, `Offer`, `Rejected`.
+- Track applications with 1 click directly from the Discovery feed or AI recommendation cards.
+- Full CSV Export and Import capabilities for seamless application logging.
 
-Finding software engineering jobs shouldn't require opening dozens of career pages every day.
-
-**JobPulse** continuously discovers newly published technical roles from company career portals, Applicant Tracking Systems (ATS), and selected job platforms, normalizes them into a unified schema, intelligently classifies experience requirements, and instantly notifies users when relevant opportunities appear.
-
-Unlike traditional job boards, JobPulse is **discovery-first**.
-
-> 💡 **JobPulse discovers jobs—it does NOT auto-apply.** Users remain in complete control of every application.
-
----
-
-# ✨ Features
-
-## 🔍 Intelligent Job Discovery & Scalable Registry
-- Indexes software engineering, AI/ML, Data, DevOps, Cloud, Cybersecurity, and Internship roles.
-- Supports **300+ companies** out of the box with an extensible architecture designed to scale to **1000+ companies**.
-- Independent connector workers supporting isolated retries, rate limiting, and failure recovery.
-
-## 🎯 Smart Search & Filtering
-- Multi-parameter Boolean search (`q`, `location`, `country`, `remote_type`, `experience_level`, `min_salary_lpa`, `company`, `source`, `verification_status`).
-- Strict experience filtering guaranteeing that users searching for Freshers receive **only genuine entry-level opportunities**.
-
-## 🧠 Weighted Experience Classification Engine
-Normalizes postings into **14 standardized categories**:
-- `Internship`
-- `Campus Hiring`
-- `Fresher`
-- `Associate`
-- `Mid-Level`
-- `Senior`
-- `Lead`
-- `Staff`
-- `Principal`
-- `Manager`
-- `Director`
-- `Vice President`
-- `Distinguished Engineer`
-- `Fellow`
-
-Uses weighted multi-signal logic:
-1. Structured experience data (highest precedence).
-2. Title & description NLP keyword extraction.
-3. Strict YOE numerical requirements evaluation.
-
-## 🛡️ Persistent Job Tracking & Verification Engine
-- Replaces naive immediate deletion with multi-cycle lifecycle tracking (`ACTIVE`, `EXPIRED`, `FILLED`, `REMOVED`, `UNKNOWN`).
-- Tracks `first_seen`, `last_seen`, `last_verified`, `verification_count`, `consecutive_missing_count`.
-- Requires **3 consecutive missing cycles** before marking a job as `REMOVED`. Network drops or 5xx HTTP errors never remove jobs.
-
-## 🟢 Real-Time Verification Badges & Smart Apply Links
-- Displays live status badges on job cards:
-  - 🟢 **Verified Today**
+### 4. 🛡️ Persistent Job Verification & Closed Job Detection
+- Jobs undergo continuous re-verification cycles.
+- Badges display real-time status:
+  - 🟢 **Verified & Live**
   - 🟡 **Verification Pending**
-  - 🔴 **Removed from Source**
-- Smart URL resolution priority: `external_apply_url` ➔ `job_url` ➔ `source_url`.
+  - 🔴 **Closed / Removed from Source** (Disables apply buttons and warns applicants).
+- Requires 3 consecutive missing cycles before marking jobs as removed, protecting against temporary network blips.
 
-## 📢 Real-Time Notifications
-- Instant alerts sent via Telegram bot whenever matching jobs are indexed.
-- Flexible saved search preferences with custom frequency and keyword alerts.
+### 5. ⚡ Automated Search Alert Rules & Telegram Notifications
+- Define custom alert rules (Keywords, Location, Min Salary LPA, Remote Mode, Telegram Recipient Chat ID).
+- Ingested opportunities matching your rules trigger instant Telegram notifications with direct apply links.
 
-## 📊 Analytics & Connector Diagnostics Dashboard
-- Live dashboard displaying:
-  - Freshers jobs today, Internships today, Mid-Level today, Senior today.
-  - Jobs verified today & verification success rate %.
-  - Top hiring companies, active ATS breakdown, top hiring cities.
-  - Connector runtime, health status, and success rates.
+### 6. 📊 Real-Time Analytics & Connector Diagnostics
+- Live telemetry command center tracking total indexed jobs, fresher opportunities, active ATS platforms, hiring city breakdowns, and individual connector latency/health.
 
 ---
 
 # 🏗️ System Architecture
 
 ```
-                 +-----------------------------------+
-                 | Company Career Pages & ATS Inputs |
-                 +-----------------------------------+
-                   (Greenhouse, Workday, Ashby, etc.)
-                                 │
-                                 ▼
-                 +-----------------------------------+
-                 |     Plugin Connector Engine       |
-                 +-----------------------------------+
-                                 │
-                                 ▼
-                 +-----------------------------------+
-                 |    URL & Schema Normalization     |
-                 +-----------------------------------+
-                                 │
-                                 ▼
-                 +-----------------------------------+
-                 |  Weighted Experience Classifier   |
-                 +-----------------------------------+
-                                 │
-                                 ▼
-                 +-----------------------------------+
-                 |   4-Tier Priority Deduplication   |
-                 +-----------------------------------+
-                                 │
-                                 ▼
-                 +-----------------------------------+
-                 |  PostgreSQL / Async DB Engine     |
-                 +-----------------------------------+
-                        │                     │
-                        ▼                     ▼
-             +---------------------+  +----------------------+
-             | Verification Engine |  | Notification Engine  |
-             +---------------------+  +----------------------+
-                        │                     │
-                        └──────────┬──────────┘
-                                   ▼
-                 +-----------------------------------+
-                 |   Dashboard UI & Telemetry API    |
-                 +-----------------------------------+
+                 +-------------------------------------------------------+
+                 |       Company Career Portals & ATS Integrations       |
+                 | (Greenhouse, Lever, Ashby, Workday, SmartRecruiters)  |
+                 +-------------------------------------------------------+
+                                             │
+                                             ▼
+                 +-------------------------------------------------------+
+                 |            Plugin-Based Connector Framework           |
+                 +-------------------------------------------------------+
+                                             │
+                                             ▼
+                 +-------------------------------------------------------+
+                 |             URL Normalizer & Deduplicator             |
+                 +-------------------------------------------------------+
+                                             │
+                                             ▼
+                 +-------------------------------------------------------+
+                 |       Multi-Signal Experience & Domain Classifier     |
+                 +-------------------------------------------------------+
+                                             │
+                                             ▼
+                 +-------------------------------------------------------+
+                 |           Async SQLAlchemy / SQLite / Postgres        |
+                 +-------------------------------------------------------+
+                        │                    │                    │
+                        ▼                    ▼                    ▼
+             +---------------------+  +-------------+  +--------------------+
+             | Verification Engine |  | AI Matcher  |  | Telegram Dispatch  |
+             +---------------------+  +-------------+  +--------------------+
+                        │                    │                    │
+                        └────────────────────┼────────────────────┘
+                                             ▼
+                 +-------------------------------------------------------+
+                 |  Modern Responsive Dashboard & Application Workspace  |
+                 +-------------------------------------------------------+
 ```
 
 ---
 
 # ⚡ Tech Stack
 
-### Frontend
-- **Framework**: React / Modern Vanilla Web Components & Vite
-- **Styling**: Modern CSS Design System (Glassmorphism, Dark Mode tokens, Responsive Grid)
-- **State & Routing**: Asynchronous Fetch API & Custom Event Bus
-
-### Backend
-- **Framework**: FastAPI (Python 3.12+)
-- **ORM & Database**: SQLAlchemy (AsyncIO) & SQLite / PostgreSQL
-- **Migrations**: Alembic / Automatic PRAGMA Schema Migrator
-- **Task Scheduling**: Custom Async Scheduler & Verification Loop
-
-### Infrastructure & Security
-- **Containerization**: Docker & Docker Compose
-- **Alert Dispatch**: Telegram Bot API / MarkdownV2 Formatter
-- **Testing**: pytest & unittest
-
----
-
-# 🧠 Core Engineering Concepts
-
-### 🧩 Plugin-Based Connector Architecture
-Connectors inherit from a `BaseConnector` class with isolated `initialize()`, `fetch()`, `validate()`, and `shutdown()` methods. New career sources or ATS integrations can be added by declaring a class without altering core scheduler logic.
-
-### 🔍 4-Tier Fingerprint Deduplication
-Prevent duplicate job listings using a priority fallback hierarchy:
-1. `External Job ID` + `Company`
-2. `Canonical URL`
-3. `Company` + `Title`
-4. `Company` + `Title` + `Location`
-
-### 🛡️ Resilience & Fault Tolerance
-Connectors run independently with isolated error handling. Failed connector HTTP requests do not interrupt other connectors, and database schema updates run with zero-downtime column migrations.
+- **Backend**: FastAPI (AsyncIO, Python 3.11+), Pydantic v2, Uvicorn
+- **Database & ORM**: SQLAlchemy 2.0 (Async), SQLite / PostgreSQL, Alembic
+- **Document Parsing & AI**: PyPDF2, ElementTree DOCX XML extractor, NLP Skill Classifier
+- **Frontend**: Vanilla JS (ES6+), CSS3 Modern Bento Design System (Dark/Light Mode, Glassmorphism, Micro-animations)
+- **Containerization & CI/CD**: Docker, Docker Compose, GitHub Actions Cron Scheduler
+- **Alert Channels**: Telegram Bot API / MarkdownV2
 
 ---
 
@@ -213,168 +133,170 @@ Connectors run independently with isolated error handling. Failed connector HTTP
 
 ```text
 JobPulse/
+├── .github/
+│   └── workflows/
+│       ├── job_discovery_pipeline.yml  # Scheduled GitHub Actions crawler (runs every 2 hours)
+│       └── render_keep_alive.yml       # 24/7 Keep-Alive pinger preventing free-tier sleep
 ├── backend/
 │   ├── app/
-│   │   ├── api/             # FastAPI endpoints (jobs, connectors, analytics, notifications, searches)
-│   │   ├── connectors/      # Plugin connector implementations (Greenhouse, Lever, TechCareers, Configurable)
-│   │   │   └── config/      # companies.json (300+ Company Registry)
-│   │   ├── engine/          # Core engines (normalizer, deduplicator, verification, scheduler, search, matching)
-│   │   ├── models/          # SQLAlchemy async database models (Job, CompanyRegistry, ConnectorHealth, etc.)
-│   │   ├── notifications/   # Telegram bot notification dispatcher
-│   │   ├── config.py        # Pydantic environment settings
-│   │   ├── database.py      # Async database connection and auto-migrator
-│   │   └── main.py          # FastAPI application entry point
-│├── frontend/
-│   ├── css/                 # CSS Design tokens and styles
-│   ├── js/                  # Frontend interactive scripts
-│   └── index.html           # Main SPA dashboard
-├── tests/                   # Engine unit test suite
-├── TOP_100_COMPANIES.md               # Top 100 Product Companies Registry
-├── TOP_100_INDIAN_STARTUPS.md          # Top 100 Indian Startups Registry
-├── TOP_100_IT_SERVICES_AND_CONSULTING.md # Top 100 IT Services Registry
-├── Dockerfile               # Production container image
-├── docker-compose.yml       # Multi-container orchestration
-├── run_dev.py               # Development server runner
-└── README.md                # Documentation
+│   │   ├── api/                        # REST API routers (jobs, auth, ai, applications, searches, analytics)
+│   │   ├── connectors/                 # ATS & Company connectors (Greenhouse, Lever, Configurable, etc.)
+│   │   │   └── config/                 # companies.json (300+ Company Registry)
+│   │   ├── engine/                     # Core engines (ai_layer, resume_parser, deduplicator, normalizer, verifier)
+│   │   ├── models/                     # SQLAlchemy models (Job, User, CandidateProfile, ApplicationTracker, etc.)
+│   │   ├── notifications/              # Telegram alert dispatcher
+│   │   ├── services/                   # Authentication & Session services
+│   │   ├── config.py                   # App configuration & settings
+│   │   ├── database.py                 # Async database session & migration helpers
+│   │   └── main.py                     # FastAPI entrypoint & static mounts
+│   └── run_worker.py                   # Standalone CLI crawler & verification worker
+├── frontend/
+│   ├── css/style.css                   # Bento Grid design system & dark mode tokens
+│   ├── js/app.js                       # SPA state, auth, resume matcher & Kanban board
+│   ├── assets/logo.png                 # Brand assets
+│   └── index.html                      # Single-page application interface
+├── tests/                              # Unit & integration test suites
+├── Dockerfile                          # Production container build
+├── docker-compose.yml                  # Multi-container orchestration
+├── render.yaml                         # PaaS deployment blueprint
+├── requirements.txt                    # Production Python dependencies
+├── run_dev.py                          # Local development runner
+└── README.md                           # Documentation
 ```
 
 ---
 
-# 🚀 Getting Started
+# 🚀 Quick Start (Local Setup)
 
-### Prerequisites
-- Python 3.12+
-- Node.js 18+ (optional for frontend assets)
-- Docker & Docker Compose (optional)
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Sthitadhi1/JobPulse.git
+cd JobPulse
+```
 
-### Local Setup
+### 2. Set Up Python Virtual Environment
+```bash
+python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On Linux / macOS:
+source venv/bin/activate
+```
 
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/Sthitadhi1/JobPulse.git
-   cd JobPulse
-   ```
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-2. **Configure Environment Variables**
-   Create a `.env` file in the project root:
-   ```env
-   TELEGRAM_BOT_TOKEN="your_telegram_bot_token_here"
-   DATABASE_URL="sqlite+aiosqlite:///./jobpulse.db"
-   ```
+### 4. Configure Environment Variables (Optional)
+Create a `.env` file in the root directory:
+```env
+TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
+SECRET_KEY="your_secure_random_key"
+ENABLE_SCHEDULER="true"
+```
 
-3. **Run the Backend Application**
-   ```bash
-   pip install -r requirements.txt
-   python run_dev.py
-   ```
-   The backend FastAPI server will start at `http://localhost:8000`.
-
-4. **Access the Dashboard**
-   Open `http://localhost:8000` in your web browser.
+### 5. Launch Development Server
+```bash
+python run_dev.py
+```
+Open **`http://localhost:8000/dashboard/`** in your browser. API specifications are accessible at **`http://localhost:8000/docs`**.
 
 ---
 
 # 🐳 Docker Deployment
 
-To spin up JobPulse using Docker Compose:
+To launch JobPulse using Docker Compose:
 
 ```bash
 docker-compose up -d --build
 ```
-
-Access the live containerized application at `http://localhost:8000`.
-
----
-
-# ⚙️ Production Scheduler & Architecture
-
-JobPulse includes a production-ready scheduling and concurrency engine:
-
-### ⏱️ Hourly Discovery Scheduler
-- **Immediate Startup Execution**: The scheduler initiates a job discovery cycle immediately upon application startup—no waiting 1 hour for the first run.
-- **Configurable Interval**: Executes every `DISCOVERY_INTERVAL_SECONDS` (default: `3600` seconds / 1 hour).
-- **Protected Remote Endpoint**: External schedulers and cron services can trigger discovery via `POST /api/v1/connectors/run` by supplying header `X-Scheduler-Secret: <SCHEDULER_SECRET>`.
-
-### ⚡ Concurrent Connector Execution
-- **Controlled Concurrency**: Executes connectors in parallel using `asyncio.gather()` bounded by `asyncio.Semaphore(CONNECTOR_MAX_CONCURRENCY)` (default: `5`).
-- **Database Safety**: Each concurrent connector task runs within its own independent `AsyncSessionLocal()` database session to adhere to SQLAlchemy async thread safety.
-- **Fault Isolation**: A failure in any single connector is caught safely and never interrupts other executing connectors.
-
-### 🔒 Discovery Lock & Execution Telemetry
-- **Distributed DB Lock**: Uses a database-backed `DiscoveryLock` table to guarantee that only ONE discovery cycle executes at any given time across multi-worker environments.
-- **Correlation ID**: Every discovery cycle assigns a unique `execution_id` (UUID) passed down to all connector tasks, recording `ConnectorExecution` and `ConnectorHealth` telemetry.
+Access the application at `http://localhost:8000`.
 
 ---
 
-# 🔐 User Authentication & Authorization
+# 🤖 Background Worker CLI
 
-JobPulse provides complete user authentication and account authorization:
+JobPulse includes a standalone CLI worker for running automated discoveries or verifications:
 
-- **Auth Endpoints**:
-  - `POST /api/v1/auth/signup`: Account creation with automatic email verification dispatch.
-  - `POST /api/v1/auth/login`: HttpOnly cookie & bearer token session creation.
-  - `POST /api/v1/auth/logout`: Revokes active user session.
-  - `GET /api/v1/auth/verify-email`: Single-use cryptographically secure email verification token.
-  - `POST /api/v1/auth/request-otp` & `POST /api/v1/auth/verify-otp`: Rate-limited 6-digit OTP verification.
-  - `POST /api/v1/auth/forgot-password` & `POST /api/v1/auth/reset-password`: Hashed token password reset.
-  - `GET /api/v1/auth/me`: Current session inspection.
-- **Security Guardrails**:
-  - Password hashing with Argon2id / bcrypt.
-  - HttpOnly, SameSite=Lax session cookies.
-  - Strict backend authorization on `SavedSearch`, `Bookmark`, and `ApplicationTracker` objects preventing IDOR vulnerabilities.
-- **Third-Party Security Policy**:
-  - **Zero Credential Scraping**: JobPulse **never** asks for, collects, or stores passwords, cookies, or OTPs for third-party job boards (LinkedIn, Naukri, etc.). All ingestion uses public endpoints and official APIs.
+```bash
+# Run a full discovery and verification cycle:
+python backend/run_worker.py --mode=all
 
+# Run discovery only:
+python backend/run_worker.py --mode=discover
+
+# Run continuous daemon mode (crawls every 2 hours):
+python backend/run_worker.py --mode=daemon --interval=7200
+```
+
+---
+
+# 🌐 Keeping Render Free Tier Awake 24/7
+
+Render Free web services spin down after 15 minutes of inactivity. To keep your deployment running 24/7 with zero spin-downs:
+1. Go to **[UptimeRobot.com](https://uptimerobot.com/)** (Free).
+2. Create an **HTTP(s) Monitor**:
+   - **URL:** `https://your-app-name.onrender.com/api/v1/health`
+   - **Interval:** `Every 5 minutes`
+3. Save monitor. The server will receive pings every 5 minutes and remain awake 24/7.
+
+---
+
+# 🔐 Authentication & Security
+
+- **Session Security**: Dual Bearer Token in `localStorage` + HTTP-Only Cookie support ensuring seamless cross-origin and iframe authentication.
+- **2-Step Direct Password Reset**: In-modal OTP and reset token flow allowing instant password changes without external SMTP dependencies.
+- **Zero Third-Party Scraping**: JobPulse never asks for or stores user credentials for external websites. All jobs are indexed through public endpoints and official APIs.
 
 ---
 
 # 🗺️ Roadmap
 
-- [x] Project Architecture & Database Schema
-- [x] Plugin Connector Framework
-- [x] 300+ Company Registry (`companies.json`)
-- [x] Weighted Experience Classification Engine (14 categories)
-- [x] Persistent Job Tracking & Verification Engine
-- [x] Real-time Verification Badges & Smart Apply Links
-- [x] Search & Boolean Query Engine
-- [x] Telegram Alert Dispatcher
-- [x] Real-Time Telemetry & Analytics Dashboard
+- [x] Multi-Connector Framework & 300+ Company Registry
+- [x] Weighted Multi-Signal Experience Classification Engine
+- [x] Continuous Re-verification & Dead-Link Guard
+- [x] Multi-Filter Boolean Search & Salary Range Chips
+- [x] Multi-Section AI Resume Parser (Education, 25+ Skills, Projects, Experience)
+- [x] 7-Part Granular Recommendation & Match Engine
+- [x] Application Kanban Tracking Board with CSV Sync
+- [x] Automated Search Alert Rules & Telegram Dispatcher
+- [x] GitHub Actions Automated Crawler & Render Keep-Alive Workflows
 - [ ] Email Notification Channel
 - [ ] Browser Push Notifications
-- [ ] Slack & Discord Webhook Connectors
-- [ ] AI-Powered Resume-to-Job Matching
+- [ ] Discord & Slack Webhook Dispatchers
 
 ---
 
 # 🤝 Contributing
 
-Contributions are warmly welcome! Whether you are adding new company connectors, expanding ATS support, improving classification rules, or refining the UI:
-
-1. Fork the Repository.
-2. Create a Feature Branch (`git checkout -b feature/NewConnector`).
-3. Commit your changes (`git commit -m 'Add NewConnector'`).
-4. Push to the Branch (`git push origin feature/NewConnector`).
+Contributions are welcome! To contribute:
+1. Fork the Project.
+2. Create a Feature Branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your Changes (`git commit -m 'feat: Add AmazingFeature'`).
+4. Push to the Branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
 ---
 
 # 📄 License
 
-This project is licensed under the **MIT License** — see the `LICENSE` file for details.
+Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ---
 
 # 👨‍💻 Author
 
 **Sthitadhi Maity**  
-B.Tech Computer Science Engineering (Software Engineering)  
-SRM Institute of Science and Technology  
+B.Tech in Computer Science and Engineering (Software Engineering)  
+SRM Institute of Science and Technology, Chennai  
 
-- **GitHub**: [@Sthitadhi1](https://github.com/Sthitadhi1)
-- **Project Repository**: [JobPulse on GitHub](https://github.com/Sthitadhi1/JobPulse)
+- **GitHub**: [@Sthitadhi1](https://github.com/Sthitadhi1)  
+- **LinkedIn**: [Sthitadhi Maity](https://linkedin.com/in/sthitadhimaity)  
+- **Repository**: [JobPulse on GitHub](https://github.com/Sthitadhi1/JobPulse)
 
 ---
 
 <div align="center">
-⭐ <b>If you find JobPulse helpful, please consider giving it a star on GitHub!</b> ⭐
+⭐ <b>Star JobPulse on GitHub if you find it helpful!</b> ⭐
 </div>
