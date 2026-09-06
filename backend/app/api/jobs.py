@@ -1,5 +1,9 @@
+import datetime
+import hashlib
+import uuid
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, desc, or_
@@ -9,13 +13,243 @@ from backend.app.models.job import Job, Bookmark, ApplicationTracker, User
 from backend.app.api.auth import get_current_user_optional
 from backend.app.models.search_request import SearchRequest
 from backend.app.engine.search import SearchEngine
-from backend.app.engine.normalizer import NormalizerEngine
+from backend.app.engine.normalizer import NormalizerEngine, URLNormalizerValidator
 from backend.app.engine.deduplicator import DeduplicatorEngine
 from backend.app.engine.scheduler import SchedulerEngine
 from backend.app.connectors.registry import connector_registry
 
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+
+
+class ManualJobCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=255, description="Job title, e.g. Senior Backend Engineer")
+    company: str = Field(..., min_length=2, max_length=255, description="Company name, e.g. Stripe, OpenAI")
+    job_url: str = Field(..., min_length=4, description="Direct application link or career URL")
+    external_apply_url: Optional[str] = None
+    location: Optional[str] = Field("Bengaluru, India", description="Job location")
+    country: Optional[str] = "India"
+    remote_type: Optional[str] = Field("Hybrid", description="Remote, Hybrid, On-site")
+    employment_type: Optional[str] = Field("Full-time", description="Full-time, Internship, Contract")
+    experience_level: Optional[str] = Field("Fresher", description="Fresher, Campus Hiring, Internship, Associate, Mid-Level, Senior, Lead")
+    salary_range: Optional[str] = None
+    min_salary_lpa: Optional[float] = None
+    max_salary_lpa: Optional[float] = None
+    department: Optional[str] = "Engineering"
+    tags: Optional[str] = None
+    skills: Optional[str] = None
+    description: Optional[str] = None
+
+
+@router.post("/manual", status_code=status.HTTP_201_CREATED)
+@router.post("/create", status_code=status.HTTP_201_CREATED)
+async def create_manual_job(
+    req: ManualJobCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Admin / Recruiter endpoint to manually post new job listings / links.
+    Immediately normalizes, validates, fingerprints, and indexes the job into the active database.
+    """
+    raw_title = req.title.strip()
+    norm_title = NormalizerEngine.normalize_title(raw_title)
+
+    # URL Validation & Normalization
+    raw_url = req.job_url.strip()
+    if not (raw_url.startswith("http://") or raw_url.startswith("https://")):
+        raw_url = f"https://{raw_url}"
+    clean_job_url = URLNormalizerValidator.strip_tracking_params(raw_url)
+
+    clean_apply_url = None
+    if req.external_apply_url and req.external_apply_url.strip():
+        raw_apply = req.external_apply_url.strip()
+        if not (raw_apply.startswith("http://") or raw_apply.startswith("https://")):
+            raw_apply = f"https://{raw_apply}"
+        clean_apply_url = URLNormalizerValidator.strip_tracking_params(raw_apply)
+
+    # Experience level detection / assignment
+    exp_level = NormalizerEngine.detect_experience_level(
+        norm_title,
+        req.description or "",
+        explicit_level=req.experience_level
+    )
+
+    # Salary normalization
+    min_sal = req.min_salary_lpa
+    max_sal = req.max_salary_lpa
+    salary_fmt = req.salary_range
+
+    if req.salary_range and not (min_sal and max_sal):
+        parsed_fmt, p_min, p_max = NormalizerEngine.parse_salary(req.salary_range, norm_title)
+        if parsed_fmt:
+            salary_fmt = parsed_fmt
+        if p_min is not None and min_sal is None:
+            min_sal = p_min
+        if p_max is not None and max_sal is None:
+            max_sal = p_max
+    elif min_sal is not None or max_sal is not None:
+        if min_sal is not None and max_sal is not None and min_sal != max_sal:
+            salary_fmt = f"₹{min_sal:g} - ₹{max_sal:g} LPA"
+        elif min_sal is not None:
+            salary_fmt = f"₹{min_sal:g}+ LPA"
+        elif max_sal is not None:
+            salary_fmt = f"Up to ₹{max_sal:g} LPA"
+
+    # Tags & Skills extraction
+    tag_list = []
+    if req.tags and req.tags.strip():
+        tag_list = [t.strip() for t in req.tags.split(",") if t.strip()]
+    elif req.skills and req.skills.strip():
+        tag_list = [t.strip() for t in req.skills.split(",") if t.strip()]
+    else:
+        tag_list = NormalizerEngine.extract_tags(norm_title, req.description or "")
+
+    raw_tags_str = ", ".join(tag_list) if tag_list else "Tech, Software Engineering"
+
+    # Fingerprint generation
+    norm_company = req.company.strip()
+    norm_location = (req.location or "Bengaluru, India").strip()
+    fp_raw = f"manual:{norm_company.lower()}:{norm_title.lower()}:{clean_job_url.lower()}"
+    fp = hashlib.sha256(fp_raw.encode("utf-8")).hexdigest()
+
+    now = datetime.datetime.utcnow()
+
+    # Check for existing job by fingerprint or exact URL
+    res_existing = await db.execute(
+        select(Job).where(
+            or_(
+                Job.hash_signature == fp,
+                Job.job_url == clean_job_url
+            )
+        )
+    )
+    existing_job = res_existing.scalars().first()
+
+    if existing_job:
+        # Update and reactivate
+        existing_job.title = norm_title
+        existing_job.company = norm_company
+        existing_job.department = req.department or existing_job.department
+        existing_job.location = norm_location
+        existing_job.remote_type = req.remote_type or existing_job.remote_type
+        existing_job.employment_type = req.employment_type or existing_job.employment_type
+        existing_job.experience_level = exp_level
+        if salary_fmt:
+            existing_job.salary_range = salary_fmt
+            existing_job.min_salary_lpa = min_sal
+            existing_job.max_salary_lpa = max_sal
+        existing_job.external_apply_url = clean_apply_url or existing_job.external_apply_url
+        existing_job.raw_tags = raw_tags_str
+        existing_job.skills = raw_tags_str
+        if req.description:
+            existing_job.description = req.description
+        existing_job.status = "ACTIVE"
+        existing_job.verification_status = "VERIFIED"
+        existing_job.last_seen = now
+        existing_job.last_verified = now
+        existing_job.consecutive_missing_count = 0
+        job_entity = existing_job
+    else:
+        ext_id = f"manual_{uuid.uuid4().hex[:10]}"
+        job_entity = Job(
+            external_job_id=ext_id,
+            title=norm_title,
+            company=norm_company,
+            department=req.department or "Engineering",
+            location=norm_location,
+            country=req.country or "India",
+            remote_type=req.remote_type or "Hybrid",
+            employment_type=req.employment_type or "Full-time",
+            experience_level=exp_level,
+            salary_range=salary_fmt,
+            min_salary_lpa=min_sal,
+            max_salary_lpa=max_sal,
+            currency="INR",
+            job_url=clean_job_url,
+            source_url=clean_job_url,
+            external_apply_url=clean_apply_url or clean_job_url,
+            apply_url=clean_apply_url or clean_job_url,
+            canonical_url=clean_job_url,
+            source="Admin Manual",
+            source_type="Direct",
+            raw_tags=raw_tags_str,
+            skills=raw_tags_str,
+            benefits="Direct Admin Posting",
+            description=req.description or f"Direct opportunity at {norm_company} for {norm_title}.",
+            hash_signature=fp,
+            status="ACTIVE",
+            verification_status="VERIFIED",
+            first_seen=now,
+            last_seen=now,
+            last_verified=now,
+            consecutive_missing_count=0,
+            posted_at=now,
+            discovered_at=now,
+            created_at=now
+        )
+        db.add(job_entity)
+
+    await db.commit()
+    await db.refresh(job_entity)
+
+    return {
+        "success": True,
+        "message": f"Job opportunity '{norm_title}' at '{norm_company}' has been published successfully.",
+        "data": {
+            "id": job_entity.id,
+            "external_job_id": job_entity.external_job_id,
+            "title": job_entity.title,
+            "company": job_entity.company,
+            "department": job_entity.department,
+            "location": job_entity.location,
+            "remote_type": job_entity.remote_type,
+            "employment_type": job_entity.employment_type,
+            "experience_level": job_entity.experience_level,
+            "salary_range": job_entity.salary_range,
+            "min_salary_lpa": job_entity.min_salary_lpa,
+            "max_salary_lpa": job_entity.max_salary_lpa,
+            "job_url": job_entity.job_url,
+            "external_apply_url": job_entity.external_apply_url,
+            "source": job_entity.source,
+            "source_type": job_entity.source_type,
+            "tags": job_entity.raw_tags.split(", ") if job_entity.raw_tags else [],
+            "raw_tags": job_entity.raw_tags,
+            "description": job_entity.description,
+            "status": job_entity.status,
+            "verification_status": job_entity.verification_status,
+            "first_seen": job_entity.first_seen.isoformat() if job_entity.first_seen else None,
+            "last_seen": job_entity.last_seen.isoformat() if job_entity.last_seen else None,
+            "posted_at": job_entity.posted_at.isoformat() if job_entity.posted_at else None
+        }
+    }
+
+
+@router.delete("/{job_id}")
+async def delete_job(
+    job_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Allows admins / users to delete or unlist a job listing from the portal.
+    """
+    res = await db.execute(select(Job).where(Job.id == job_id))
+    job = res.scalars().first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job_title = job.title
+    job.status = "REMOVED"
+    job.closed_at = datetime.datetime.utcnow()
+    job.closure_reason = "Manual Admin Removal"
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Job #{job_id} ({job_title}) has been unlisted from the portal."
+    }
+
 
 @router.get("/search")
 async def user_search_jobs(
@@ -31,9 +265,9 @@ async def user_search_jobs(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    PART 1 & 6 — User-Driven Search Endpoint with Database Fallback
+    User-Driven Search Endpoint with Database Fallback & Real-time Integration
     Constructs a SearchRequest object from user parameters and dispatches to connectors.
-    If live search yields 0 jobs (or empty keyword), falls back to active database records.
+    Combines live connector search with active database records (including manual admin postings).
     """
     req = SearchRequest(
         keyword=keyword,
@@ -64,27 +298,105 @@ async def user_search_jobs(
                 if (j.get("hash_signature") or DeduplicatorEngine.generate_fingerprint(j)) not in non_active_fps
             ]
 
-    if deduped_jobs:
-        return {
-            "success": True,
-            "query": req.to_dict(),
-            "meta": {
-                "total_records": len(deduped_jobs),
-                "page": page,
-                "limit": limit,
-                "total_pages": max(1, (len(deduped_jobs) + limit - 1) // limit)
-            },
-            "data": deduped_jobs[:limit]
-        }
+        # Also query active database jobs that match the keyword/filters
+        stmt_db_match = select(Job).where(Job.status == "ACTIVE")
+        boolean_cond = SearchEngine.build_boolean_conditions(keyword)
+        if boolean_cond is not None:
+            stmt_db_match = stmt_db_match.where(boolean_cond)
+        else:
+            stmt_db_match = stmt_db_match.where(
+                or_(
+                    Job.title.ilike(f"%{keyword}%"),
+                    Job.company.ilike(f"%{keyword}%"),
+                    Job.raw_tags.ilike(f"%{keyword}%")
+                )
+            )
 
-    # DB Fallback query for seamless discovery feed when live search returns 0
+        if location:
+            stmt_db_match = stmt_db_match.where(Job.location.ilike(f"%{location}%"))
+        if remote_type:
+            stmt_db_match = stmt_db_match.where(Job.remote_type.ilike(f"%{remote_type}%"))
+        if experience_level:
+            stmt_db_match = stmt_db_match.where(Job.experience_level.ilike(f"%{experience_level}%"))
+        if salary_min:
+            stmt_db_match = stmt_db_match.where(Job.min_salary_lpa >= salary_min)
+
+        res_matching_db = await db.execute(stmt_db_match.order_by(desc(Job.last_seen), desc(Job.id)).limit(limit))
+        db_matched_jobs = res_matching_db.scalars().all()
+
+        formatted_db_matched = [
+            {
+                "id": j.id,
+                "external_job_id": j.external_job_id,
+                "title": j.title,
+                "company": j.company,
+                "department": j.department,
+                "location": j.location,
+                "country": j.country,
+                "remote_type": j.remote_type,
+                "employment_type": j.employment_type,
+                "experience_level": j.experience_level,
+                "salary_range": j.salary_range,
+                "min_salary_lpa": j.min_salary_lpa,
+                "max_salary_lpa": j.max_salary_lpa,
+                "job_url": j.job_url,
+                "source_url": j.source_url,
+                "external_apply_url": j.external_apply_url,
+                "url": j.job_url,
+                "source": j.source,
+                "source_type": j.source_type,
+                "tags": j.raw_tags.split(", ") if j.raw_tags else [],
+                "raw_tags": j.raw_tags,
+                "description": j.description,
+                "hash_signature": j.hash_signature,
+                "is_bookmarked": j.is_bookmarked,
+                "status": j.status,
+                "verification_status": j.verification_status,
+                "first_seen": j.first_seen.isoformat() if j.first_seen else None,
+                "last_seen": j.last_seen.isoformat() if j.last_seen else None,
+                "last_verified": j.last_verified.isoformat() if j.last_verified else None,
+                "posted_at": j.posted_at.isoformat() if j.posted_at else None
+            }
+            for j in db_matched_jobs
+        ]
+
+        # Combine DB matches (prioritizing manual admin & latest seen) with connector results
+        combined_jobs = formatted_db_matched + deduped_jobs
+        seen_fps = set()
+        final_search_jobs = []
+        for j in combined_jobs:
+            fp = j.get("hash_signature") or DeduplicatorEngine.generate_fingerprint(j)
+            if fp not in seen_fps:
+                seen_fps.add(fp)
+                final_search_jobs.append(j)
+
+        if final_search_jobs:
+            return {
+                "success": True,
+                "query": req.to_dict(),
+                "meta": {
+                    "total_records": len(final_search_jobs),
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": max(1, (len(final_search_jobs) + limit - 1) // limit)
+                },
+                "data": final_search_jobs[:limit]
+            }
+
+    # DB Fallback query for seamless discovery feed when live search returns 0 or empty keyword
     stmt = select(Job).where(Job.status == "ACTIVE")
     if keyword:
         boolean_cond = SearchEngine.build_boolean_conditions(keyword)
         if boolean_cond is not None:
             stmt = stmt.where(boolean_cond)
         else:
-            stmt = stmt.where(Job.title.ilike(f"%{keyword}%"))
+            stmt = stmt.where(
+                or_(
+                    Job.title.ilike(f"%{keyword}%"),
+                    Job.company.ilike(f"%{keyword}%"),
+                    Job.raw_tags.ilike(f"%{keyword}%")
+                )
+            )
     if location:
         stmt = stmt.where(Job.location.ilike(f"%{location}%"))
     if remote_type:

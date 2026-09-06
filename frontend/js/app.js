@@ -1552,6 +1552,113 @@ function loadProfile() {
 }
 
 function initModals() {
+  // Admin Manual Post Job Modal Triggers
+  const openManualJobModal = () => {
+    const modal = document.getElementById('manual-job-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      const msg = document.getElementById('manual-job-msg');
+      if (msg) msg.classList.add('hidden');
+      document.getElementById('manual-job-title')?.focus();
+    }
+  };
+
+  const closeManualJobModal = () => {
+    document.getElementById('manual-job-modal')?.classList.add('hidden');
+  };
+
+  document.getElementById('post-job-top-btn')?.addEventListener('click', openManualJobModal);
+  document.getElementById('post-job-feed-btn')?.addEventListener('click', openManualJobModal);
+  document.getElementById('close-manual-job-modal')?.addEventListener('click', closeManualJobModal);
+  document.getElementById('cancel-manual-job')?.addEventListener('click', closeManualJobModal);
+
+  // Manual Job Form Submit
+  document.getElementById('manual-job-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('manual-job-title')?.value.trim();
+    const company = document.getElementById('manual-job-company')?.value.trim();
+    const jobUrl = document.getElementById('manual-job-url')?.value.trim();
+    const location = document.getElementById('manual-job-location')?.value.trim() || 'Bengaluru, India';
+    const remoteType = document.getElementById('manual-job-remote')?.value || 'Hybrid';
+    const expLevel = document.getElementById('manual-job-exp')?.value || 'Fresher';
+    const empType = document.getElementById('manual-job-employment')?.value || 'Full-time';
+    const salaryRange = document.getElementById('manual-job-salary')?.value.trim() || null;
+    const minSalVal = document.getElementById('manual-job-minsal')?.value;
+    const tags = document.getElementById('manual-job-tags')?.value.trim() || null;
+    const desc = document.getElementById('manual-job-desc')?.value.trim() || null;
+    const msgEl = document.getElementById('manual-job-msg');
+    const submitBtn = document.getElementById('submit-manual-job-btn');
+
+    if (!title || !company || !jobUrl) {
+      if (msgEl) {
+        msgEl.className = 'alert alert-error';
+        msgEl.textContent = 'Please fill in Title, Company, and Application Link.';
+        msgEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Publishing...';
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/jobs/manual`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          title: title,
+          company: company,
+          job_url: jobUrl,
+          external_apply_url: jobUrl,
+          location: location,
+          remote_type: remoteType,
+          experience_level: expLevel,
+          employment_type: empType,
+          salary_range: salaryRange,
+          min_salary_lpa: minSalVal ? parseFloat(minSalVal) : null,
+          tags: tags,
+          skills: tags,
+          description: desc
+        })
+      });
+
+      const result = await res.json();
+      if (res.ok && result.success) {
+        showToast(`🎉 "${title}" at ${company} posted successfully!`, 'success');
+        document.getElementById('manual-job-form')?.reset();
+        closeManualJobModal();
+
+        // Switch to Discover Jobs and reload feed
+        switchTab('jobs');
+        currentFeedPage = 1;
+        loadJobsFeed(true);
+        loadDashboardStats();
+      } else {
+        const errorDetail = result.detail ? (typeof result.detail === 'string' ? result.detail : JSON.stringify(result.detail)) : 'Failed to post job listing.';
+        if (msgEl) {
+          msgEl.className = 'alert alert-error';
+          msgEl.textContent = errorDetail;
+          msgEl.classList.remove('hidden');
+        }
+        showToast(errorDetail, 'error');
+      }
+    } catch (err) {
+      if (msgEl) {
+        msgEl.className = 'alert alert-error';
+        msgEl.textContent = 'Network error: ' + err.message;
+        msgEl.classList.remove('hidden');
+      }
+      showToast('Error posting job: ' + err.message, 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 Publish Job Listing';
+      }
+    }
+  });
+
   document.getElementById('close-modal-btn')?.addEventListener('click', () => {
     document.getElementById('save-search-modal')?.classList.add('hidden');
   });

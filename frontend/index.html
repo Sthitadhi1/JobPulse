@@ -96,6 +96,10 @@
       </div>
 
       <div class="header-actions">
+        <button id="post-job-top-btn" class="btn btn-sm btn-primary" title="Post new external job listing as Admin">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Post Job</span>
+        </button>
         <button id="sync-now-btn" class="btn btn-sm btn-outline">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           <span>Sync Sources</span>
@@ -403,6 +407,9 @@
               <span id="job-count-badge" class="badge">0 jobs found</span>
             </div>
             <div class="feed-controls">
+              <button id="post-job-feed-btn" class="btn btn-sm btn-primary">
+                ➕ Post Job Listing
+              </button>
               <button id="save-current-search-btn" class="btn btn-sm btn-outline">
                 ⚡ Save Search Alert
               </button>
@@ -640,8 +647,105 @@
 
 
   <!-- ==========================================================================
-       MODALS (Saved Search, Job Detail, Forgot Password)
+       MODALS (Manual Job Post, Saved Search, Job Detail, Forgot Password)
        ========================================================================== -->
+  <!-- Admin Manual Job Post Modal -->
+  <div id="manual-job-modal" class="modal-overlay hidden">
+    <div class="modal-card max-w-lg">
+      <div class="modal-header">
+        <div>
+          <h3>➕ Post New Job Opportunity</h3>
+          <p class="text-xs text-muted" style="margin-top: 2px;">Directly post an unlisted job link or custom role to the live portal.</p>
+        </div>
+        <button id="close-manual-job-modal" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+      <form id="manual-job-form">
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Job Title <span style="color: #ef4444;">*</span></label>
+              <input type="text" id="manual-job-title" class="input-field" placeholder="e.g. Senior Backend Engineer" required>
+            </div>
+            <div class="form-group">
+              <label>Company Name <span style="color: #ef4444;">*</span></label>
+              <input type="text" id="manual-job-company" class="input-field" placeholder="e.g. Stripe, ScaleAI, Zepto" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Application / Career URL <span style="color: #ef4444;">*</span></label>
+            <input type="url" id="manual-job-url" class="input-field" placeholder="https://careers.company.com/job/12345" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Location</label>
+              <input type="text" id="manual-job-location" class="input-field" placeholder="e.g. Bengaluru, India" value="Bengaluru, India">
+            </div>
+            <div class="form-group">
+              <label>Work Mode</label>
+              <select id="manual-job-remote" class="input-field">
+                <option value="Hybrid" selected>Hybrid</option>
+                <option value="Remote">Remote Only</option>
+                <option value="On-site">On-site</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Experience Level</label>
+              <select id="manual-job-exp" class="input-field">
+                <option value="Fresher">⭐ Freshers / Entry Level (0-1 YOE)</option>
+                <option value="Campus Hiring">🎓 Campus Hiring / Trainee</option>
+                <option value="Internship">🚀 Internship / Co-op</option>
+                <option value="Associate" selected>💼 Associate (SDE 1)</option>
+                <option value="Mid-Level">⚙️ Mid-Level (1-4 YOE / SDE 2)</option>
+                <option value="Senior">🔥 Senior (4+ YOE / SDE 3)</option>
+                <option value="Lead">👑 Lead / Tech Lead</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Employment Type</label>
+              <select id="manual-job-employment" class="input-field">
+                <option value="Full-time" selected>Full-time</option>
+                <option value="Internship">Internship</option>
+                <option value="Contract">Contract</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Salary Range (e.g. ₹15 - ₹25 LPA)</label>
+              <input type="text" id="manual-job-salary" class="input-field" placeholder="e.g. ₹15 - ₹25 LPA">
+            </div>
+            <div class="form-group">
+              <label>Min Salary (LPA Float)</label>
+              <input type="number" id="manual-job-minsal" class="input-field" placeholder="e.g. 15" step="0.5">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Key Skills & Tech Tags (comma separated)</label>
+            <input type="text" id="manual-job-tags" class="input-field" placeholder="e.g. Python, FastAPI, Docker, React, AWS">
+          </div>
+
+          <div class="form-group">
+            <label>Job Description & Responsibilities</label>
+            <textarea id="manual-job-desc" class="input-field" rows="3" placeholder="Brief job overview, requirements, and responsibilities..."></textarea>
+          </div>
+
+          <div id="manual-job-msg" class="alert hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancel-manual-job" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="submit-manual-job-btn" class="btn btn-primary">🚀 Publish Job Listing</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Save Search Modal -->
   <div id="save-search-modal" class="modal-overlay hidden">
     <div class="modal-card max-w-md">
