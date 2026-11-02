@@ -6,8 +6,12 @@ on:
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   ping-render:
+    # Forks should not ping the upstream deployment.
+    if: github.repository == 'Sthitadhi1/JobPulse'
     runs-on: ubuntu-latest
     steps:
       - name: Ping JobPulse Render URL

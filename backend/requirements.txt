@@ -1,9 +1,2 @@
-fastapi>=0.100.0
-uvicorn>=0.22.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-sqlalchemy>=2.0.0
-aiosqlite>=0.19.0
-httpx>=0.24.0
-apscheduler>=3.10.0
-python-dotenv>=1.0.0
+# Kept for backwards compatibility; the root requirements.txt is the single source of truth.
+-r ../requirements.txt
