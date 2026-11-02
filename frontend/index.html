@@ -96,7 +96,7 @@
       </div>
 
       <div class="header-actions">
-        <button id="post-job-top-btn" class="btn btn-sm btn-primary" title="Post new external job listing as Admin">
+        <button id="post-job-top-btn" class="btn btn-sm btn-primary hidden" title="Post new external job listing as Admin">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           <span>Post Job</span>
         </button>
@@ -407,7 +407,7 @@
               <span id="job-count-badge" class="badge">0 jobs found</span>
             </div>
             <div class="feed-controls">
-              <button id="post-job-feed-btn" class="btn btn-sm btn-primary">
+              <button id="post-job-feed-btn" class="btn btn-sm btn-primary hidden">
                 ➕ Post Job Listing
               </button>
               <button id="save-current-search-btn" class="btn btn-sm btn-outline">
@@ -579,13 +579,11 @@
 
           <div class="card card-padded max-w-lg">
             <h3>Link Telegram Account</h3>
-            <p class="text-muted text-sm">Generate a 1-time verification token, then message our Telegram bot with <code>/link &lt;TOKEN&gt;</code>.</p>
-            <button id="generate-tg-token-btn" class="btn btn-primary mt-4">Generate 1-Time Token</button>
-            <div id="telegram-token-display" class="hidden mt-4"></div>
-
-            <hr style="border-color: var(--border-color); margin: 20px 0;">
-
-            <h3>Test Alert Dispatch</h3>
+            <ol class="text-muted text-sm" style="padding-left: 18px; line-height: 1.7;">
+              <li>Open Telegram and send <code>/start</code> to this site's JobPulse bot.</li>
+              <li>Get your numeric chat ID (for example by messaging <code>@userinfobot</code>).</li>
+              <li>Enter it below and send a test alert. Once it arrives, the chat ID is saved for your search alerts.</li>
+            </ol>
             <div class="form-group mt-2">
               <label>Telegram Chat ID:</label>
               <input type="text" id="telegram-chat-id-input" class="input-field" placeholder="e.g. 123456789">

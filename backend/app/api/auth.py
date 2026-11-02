@@ -1,4 +1,5 @@
 import datetime
+import hmac
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Header, Cookie
 from fastapi.responses import HTMLResponse
@@ -22,6 +23,7 @@ from backend.app.config import settings
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 COOKIE_NAME = "jobpulse_session"
+MAX_OTP_ATTEMPTS = 5
 
 # Pydantic Request Models
 class SignupRequest(BaseModel):
@@ -81,6 +83,37 @@ async def get_current_user(
             detail="Authentication required."
         )
     return user
+
+
+def is_admin_user(user: Optional[User]) -> bool:
+    if not user:
+        return False
+    admin_emails = {
+        AuthService.normalize_email(e) for e in settings.ADMIN_EMAILS.split(",") if e.strip()
+    }
+    return user.email in admin_emails
+
+
+def has_valid_scheduler_secret(provided: Optional[str]) -> bool:
+    expected = settings.SCHEDULER_SECRET
+    if not expected or not provided:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
+async def require_admin(
+    user: Optional[User] = Depends(get_current_user_optional),
+    x_scheduler_secret: Optional[str] = Header(None, alias="X-Scheduler-Secret"),
+) -> Optional[User]:
+    """
+    Guards operator-only endpoints. Accepts either a signed-in account listed in
+    ADMIN_EMAILS or an automation call carrying a valid X-Scheduler-Secret header.
+    """
+    if is_admin_user(user) or has_valid_scheduler_secret(x_scheduler_secret):
+        return user
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required.")
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
@@ -183,7 +216,8 @@ async def get_me(current_user: Optional[User] = Depends(get_current_user_optiona
             "email": current_user.email,
             "email_verified": current_user.email_verified,
             "telegram_connected": current_user.telegram_connected,
-            "telegram_chat_id": current_user.telegram_chat_id
+            "telegram_chat_id": current_user.telegram_chat_id,
+            "is_admin": is_admin_user(current_user)
         }
     }
 
@@ -212,19 +246,21 @@ async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends
     res = await db.execute(select(User).where(User.email == email))
     user = res.scalars().first()
 
+    # Identical response whether or not the account exists, so this endpoint can't be
+    # used for email enumeration. The code itself is only ever delivered out-of-band
+    # (by email, or printed to the server console when SMTP is not configured).
+    generic_response = {
+        "success": True,
+        "message": "If an account with that email exists, a 6-digit reset code has been sent to it."
+    }
+
     if not user:
-        # Prevent email enumeration while giving a clear message
-        return {
-            "success": True,
-            "message": "If an account with that email exists, a password reset code has been issued."
-        }
+        return generic_response
 
     raw_otp, otp_hash = AuthService.generate_otp()
-    raw_token, token_hash = AuthService.generate_token()
     now = datetime.datetime.utcnow()
-    expires_at = now + datetime.timedelta(hours=2)
+    expires_at = now + datetime.timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
 
-    # Store OTP record
     otp_record = OtpRecord(
         email=email,
         otp_hash=otp_hash,
@@ -232,26 +268,11 @@ async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends
         attempts=0
     )
     db.add(otp_record)
-
-    # Store token record
-    reset_record = PasswordResetToken(
-        user_id=user.id,
-        token_hash=token_hash,
-        expires_at=expires_at
-    )
-    db.add(reset_record)
     await db.commit()
 
-    # Attempt to send email
-    reset_link = f"/dashboard/?reset_token={raw_token}"
-    EmailService.send_password_reset_email(user.email, reset_link)
+    EmailService.send_otp_email(user.email, raw_otp)
 
-    return {
-        "success": True,
-        "message": f"Password reset code generated. Use code {raw_otp} to set a new password.",
-        "otp_code": raw_otp,
-        "reset_token": raw_token
-    }
+    return generic_response
 
 
 @router.post("/reset-password-otp")
@@ -274,7 +295,13 @@ async def reset_password_otp(req: ResetPasswordOtpRequest, response: Response, d
     if otp_record.expires_at < now:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset code has expired.")
 
-    if otp_record.otp_hash != otp_hash:
+    if otp_record.attempts >= MAX_OTP_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many incorrect attempts. Request a new reset code."
+        )
+
+    if not hmac.compare_digest(otp_record.otp_hash, otp_hash):
         otp_record.attempts += 1
         await db.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reset code.")

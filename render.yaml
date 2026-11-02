@@ -11,3 +11,8 @@ services:
         value: "true"
       - key: ALLOWED_ORIGINS
         value: "*"
+      - key: SCHEDULER_SECRET
+        generateValue: true
+      # Set in the Render dashboard: comma-separated admin account emails.
+      - key: ADMIN_EMAILS
+        sync: false

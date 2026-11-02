@@ -232,10 +232,6 @@ function initAuthentication() {
         document.getElementById('forgot-step-1')?.classList.add('hidden');
         document.getElementById('forgot-step-2')?.classList.remove('hidden');
 
-        if (result.otp_code) {
-          document.getElementById('reset-otp-input').value = result.otp_code;
-        }
-
         const msg2 = document.getElementById('reset-otp-msg');
         if (msg2) {
           msg2.textContent = result.message || 'Reset code sent!';
@@ -407,6 +403,14 @@ function updateHeaderUserUI(user) {
   }
   if (emailEl && user.email) {
     emailEl.textContent = user.email;
+  }
+  // Job posting is restricted to accounts listed in the server's ADMIN_EMAILS.
+  ['post-job-top-btn', 'post-job-feed-btn'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('hidden', !user.is_admin);
+  });
+  const tgInput = document.getElementById('telegram-chat-id-input');
+  if (tgInput && user.telegram_chat_id && !tgInput.value) {
+    tgInput.value = user.telegram_chat_id;
   }
 }
 
@@ -1383,7 +1387,7 @@ async function dropToColumn(e, newStatus) {
 
   try {
     const res = await fetch(`${API_BASE}/applications/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: getAuthHeaders(),
       body: JSON.stringify({ status: newStatus })
     });
@@ -1501,36 +1505,31 @@ async function triggerManualSync() {
    10. TELEGRAM NOTIFICATIONS
    ========================================================================== */
 function initTelegramView() {
-  document.getElementById('save-telegram-btn')?.addEventListener('click', async () => {
-    const chatId = document.getElementById('telegram-chat-id-input')?.value.trim();
+  document.getElementById('send-telegram-test-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('telegram-chat-id-input');
+    const resultEl = document.getElementById('telegram-test-result');
+    const chatId = input?.value.trim();
     if (!chatId) {
       showToast('Please enter your numeric Telegram Chat ID.', 'warning');
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE}/notifications/telegram/connect`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ chat_id: chatId })
-      });
-      if (res.ok) {
-        showToast('Telegram alerts connected successfully!', 'success');
-      }
-    } catch (err) {
-      showToast('Error connecting Telegram: ' + err.message, 'error');
-    }
-  });
-
-  document.getElementById('send-test-alert-btn')?.addEventListener('click', async () => {
     showToast('Sending test job alert...', 'info');
     try {
       const res = await fetch(`${API_BASE}/notifications/telegram/test`, {
         method: 'POST',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ chat_id: chatId })
       });
-      if (res.ok) {
-        showToast('Test notification dispatched to your Telegram!', 'success');
+      const result = await res.json();
+      const delivered = res.ok && result.delivered_via_api;
+      if (resultEl) {
+        resultEl.textContent = result.message || result.detail || 'Could not send test alert.';
+        resultEl.className = `alert mt-3 ${delivered ? 'alert-success' : 'alert-error'}`;
+      }
+      if (delivered && currentUser) {
+        currentUser.telegram_chat_id = chatId;
+        currentUser.telegram_connected = true;
       }
     } catch (err) {
       showToast('Error sending test alert: ' + err.message, 'error');

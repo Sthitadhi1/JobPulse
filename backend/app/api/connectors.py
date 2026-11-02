@@ -9,6 +9,7 @@ from backend.app.database import get_db
 from backend.app.models.job import ConnectorHealth, ConnectorExecution, Job, CompanyRegistry
 from backend.app.engine.scheduler import scheduler_engine
 from backend.app.engine.verification import VerificationEngine
+from backend.app.api.auth import require_admin, has_valid_scheduler_secret
 
 router = APIRouter(prefix="/admin/connectors", tags=["Admin Connectors"])
 
@@ -23,9 +24,8 @@ async def run_scheduler_discovery(
     Triggers complete job discovery cycle. Requires internal SCHEDULER_SECRET.
     """
     provided_secret = x_scheduler_secret or scheduler_secret
-    expected_secret = getattr(settings, "SCHEDULER_SECRET", None)
 
-    if not provided_secret or provided_secret != expected_secret:
+    if not has_valid_scheduler_secret(provided_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized. Invalid or missing scheduler secret."
@@ -40,7 +40,7 @@ async def run_scheduler_discovery(
 
 
 @router.post("/dead-links/verify")
-async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db)):
+async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db), _admin=Depends(require_admin)):
     """
     Manual trigger to verify active jobs and auto-remove 404/dead listings immediately.
     """
@@ -209,7 +209,7 @@ async def get_connector_health(db: AsyncSession = Depends(get_db)):
     }
 
 @router.post("/sync")
-async def trigger_manual_sync(db: AsyncSession = Depends(get_db)):
+async def trigger_manual_sync(db: AsyncSession = Depends(get_db), _admin=Depends(require_admin)):
     result = await scheduler_engine.run_discovery_cycle(db)
     return {
         "success": True,
@@ -218,7 +218,7 @@ async def trigger_manual_sync(db: AsyncSession = Depends(get_db)):
     }
 
 @router.post("/verify-dead-links")
-async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db)):
+async def trigger_dead_link_verification(db: AsyncSession = Depends(get_db), _admin=Depends(require_admin)):
     """
     Manual trigger to verify active jobs and auto-remove 404/dead listings immediately.
     """

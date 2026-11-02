@@ -10,7 +10,7 @@ from sqlalchemy import func, desc, or_
 
 from backend.app.database import get_db
 from backend.app.models.job import Job, Bookmark, ApplicationTracker, User
-from backend.app.api.auth import get_current_user_optional
+from backend.app.api.auth import get_current_user_optional, require_admin
 from backend.app.models.search_request import SearchRequest
 from backend.app.engine.search import SearchEngine
 from backend.app.engine.normalizer import NormalizerEngine, URLNormalizerValidator
@@ -45,7 +45,7 @@ class ManualJobCreate(BaseModel):
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_manual_job(
     req: ManualJobCreate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: Optional[User] = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -228,11 +228,11 @@ async def create_manual_job(
 @router.delete("/{job_id}")
 async def delete_job(
     job_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: Optional[User] = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Allows admins / users to delete or unlist a job listing from the portal.
+    Allows admins to unlist a job listing from the portal.
     """
     res = await db.execute(select(Job).where(Job.id == job_id))
     job = res.scalars().first()
