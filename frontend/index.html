@@ -3,25 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JobPulse — Real-Time Job Discovery & Career Intelligence Platform</title>
+  <title>JobPulse — Free Job Search for Students, Freshers & New Grads</title>
+  <meta name="description" content="Search live, verified tech jobs, internships and fresher roles pulled straight from company career pages. Free and open source, no sign-up needed to browse.">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" type="image/png" href="assets/logo.png">
+
+  <!-- Open Graph / social previews -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="JobPulse">
+  <meta property="og:title" content="JobPulse — Free Job Search for Students, Freshers & New Grads">
+  <meta property="og:description" content="Browse live, verified tech jobs and internships from company career pages. Free and open source, no sign-up needed to search.">
+  <meta property="og:image" content="assets/logo.png">
+  <meta property="og:image:alt" content="JobPulse logo">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="JobPulse — Free Job Search for Students, Freshers & New Grads">
+  <meta name="twitter:description" content="Browse live, verified tech jobs and internships from company career pages. Free and open source, no sign-up needed to search.">
   <!-- Modern Font Imports -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=2.4">
+  <link rel="stylesheet" href="css/style.css?v=2.5">
 </head>
 <body>
 
+  <noscript>
+    <p style="padding: 16px; text-align: center;">JobPulse is a free, open-source job search site for students and new grads. Enable JavaScript to browse and search live job listings.</p>
+  </noscript>
+
   <!-- ==========================================================================
-       1. AUTHENTICATION & LANDING SCREEN (Shown when unauthenticated)
+       1. SIGN IN / SIGN UP MODAL (Opened from the header or a feature that needs an account)
        ========================================================================== -->
-  <div id="auth-screen" class="auth-screen-container">
-    <div class="ambient-mesh"></div>
+  <div id="auth-screen" class="modal-overlay auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
     <div class="auth-card">
+      <button id="close-auth-modal" class="btn btn-ghost btn-sm auth-close-btn" aria-label="Close">✕</button>
       <div class="auth-header">
         <img src="assets/logo.png" alt="JobPulse Logo" class="auth-brand-logo" width="64" height="64" style="width: 64px; height: 64px; max-width: 64px; max-height: 64px; object-fit: cover;">
-        <h1 class="auth-title">JobPulse</h1>
-        <p class="auth-subtitle">Intelligent Job-Search & Career Operating System</p>
+        <h2 id="auth-modal-title" class="auth-title">JobPulse</h2>
+        <p id="auth-prompt-msg" class="auth-subtitle"></p>
       </div>
 
       <!-- Auth Tab Navigation (Login vs Signup) -->
@@ -81,9 +99,9 @@
 
 
   <!-- ==========================================================================
-       2. PROTECTED WORKSPACE (Shown post-authentication)
+       2. WORKSPACE (Job discovery is public; personal tabs ask for sign-in)
        ========================================================================== -->
-  <div id="app-workspace" class="app-layout hidden">
+  <div id="app-workspace" class="app-layout">
     <!-- Ambient Background Glow -->
     <div class="ambient-mesh"></div>
 
@@ -100,19 +118,21 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           <span>Post Job</span>
         </button>
-        <button id="sync-now-btn" class="btn btn-sm btn-outline">
+        <button id="sync-now-btn" class="btn btn-sm btn-outline hidden">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           <span>Sync Sources</span>
         </button>
         <button id="theme-toggle" class="btn btn-sm btn-icon" title="Toggle Light/Dark Theme">
           🌙
         </button>
-        <div class="notification-bell" id="notif-bell" title="Notification Center">
+        <div class="notification-bell hidden" id="notif-bell" title="Notification Center">
           🔔 <span id="notif-count" class="bell-badge">0</span>
         </div>
 
+        <button id="header-signin-btn" class="btn btn-sm btn-primary">Sign in / Sign up</button>
+
         <!-- Authenticated User Profile Pill & Dropdown -->
-        <div class="header-user-profile">
+        <div id="header-user-profile" class="header-user-profile hidden">
           <div id="header-profile-pill" class="user-profile-pill">
             <div id="header-user-avatar" class="user-avatar">S</div>
             <span id="header-user-name" class="user-name-text">Sthitadhi</span>
@@ -140,11 +160,11 @@
       <!-- Sidebar Navigation -->
       <aside class="sidebar">
         <nav class="nav-menu">
-          <a href="#" class="nav-item active" data-tab="dashboard">
+          <a href="#" class="nav-item" data-tab="dashboard">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             <span>Dashboard</span>
           </a>
-          <a href="#" class="nav-item" data-tab="jobs">
+          <a href="#" class="nav-item active" data-tab="jobs">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
             <span>Discover Jobs</span>
           </a>
@@ -196,7 +216,7 @@
         <!-- ==================================================================
              TAB 1: POST-LOGIN COMMAND CENTER DASHBOARD
              ================================================================== -->
-        <section id="tab-dashboard" class="tab-pane active">
+        <section id="tab-dashboard" class="tab-pane">
           <!-- Hero Greeting -->
           <div class="dashboard-hero">
             <h1 id="dashboard-user-greeting">Good morning, Sthitadhi 👋</h1>
@@ -335,7 +355,7 @@
         <!-- ==================================================================
              TAB 2: DISCOVER JOBS
              ================================================================== -->
-        <section id="tab-jobs" class="tab-pane">
+        <section id="tab-jobs" class="tab-pane active">
           <!-- Search & Filter Header -->
           <div class="search-panel">
             <div class="search-input-wrapper">
@@ -854,6 +874,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=2.4"></script>
+  <script src="js/app.js?v=2.5"></script>
 </body>
 </html>

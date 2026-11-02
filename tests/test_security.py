@@ -187,6 +187,31 @@ class TestWorkspaceIsolation(SecurityTestCase):
         self.assertEqual(anon.get("/api/v1/notifications/logs").status_code, 401)
         self.assertEqual(anon.post("/api/v1/notifications/telegram/test", json={"chat_id": "1"}).status_code, 401)
 
+    def test_bookmarks_require_login(self):
+        admin = self.client_for(ADMIN_EMAIL, name="Admin")
+        job_id = admin.post("/api/v1/jobs/manual", json=TestAdminEndpoints.JOB).json()["data"]["id"]
+        self.assertEqual(TestClient(app).post(f"/api/v1/jobs/{job_id}/bookmark").status_code, 401)
+        res = self.client_for("alice@example.com").post(f"/api/v1/jobs/{job_id}/bookmark")
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["data"]["is_bookmarked"])
+
+
+class TestPublicJobDiscovery(SecurityTestCase):
+    """Anonymous visitors can browse jobs; only personal features need an account."""
+
+    def test_job_browsing_is_public(self):
+        admin = self.client_for(ADMIN_EMAIL, name="Admin")
+        job_id = admin.post("/api/v1/jobs/manual", json=TestAdminEndpoints.JOB).json()["data"]["id"]
+        anon = TestClient(app)
+        self.assertEqual(anon.get("/api/v1/jobs").status_code, 200)
+        self.assertEqual(anon.get(f"/api/v1/jobs/{job_id}").status_code, 200)
+        self.assertEqual(anon.get("/api/v1/analytics/dashboard").status_code, 200)
+
+    def test_robots_txt_allows_crawling(self):
+        res = TestClient(app).get("/robots.txt")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("Allow: /", res.text)
+
 
 if __name__ == "__main__":
     unittest.main()
