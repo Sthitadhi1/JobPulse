@@ -1,0 +1,27 @@
+name: Add a company
+description: Request that a company's careers page be tracked
+labels: [company-request, good first issue]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Company name
+    validations:
+      required: true
+  - type: input
+    id: careers-url
+    attributes:
+      label: Official careers page URL
+      placeholder: https://boards.greenhouse.io/examplecorp
+    validations:
+      required: true
+  - type: input
+    id: ats
+    attributes:
+      label: ATS platform (if known)
+      description: Greenhouse, Lever, Ashby, Workday, SmartRecruiters, ...
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: Locations they hire in, fresher/intern programmes, etc.
