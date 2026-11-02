@@ -17,9 +17,46 @@ from backend.app.engine.normalizer import NormalizerEngine, URLNormalizerValidat
 from backend.app.engine.deduplicator import DeduplicatorEngine
 from backend.app.engine.scheduler import SchedulerEngine
 from backend.app.connectors.registry import connector_registry
+from backend.app.services.bookmark_service import annotate_bookmarks, bookmarked_job_ids
 
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+
+
+def _serialize_job(j: Job) -> dict:
+    """Feed representation of a job. is_bookmarked is per user and filled in by annotate_bookmarks."""
+    return {
+        "id": j.id,
+        "external_job_id": j.external_job_id,
+        "title": j.title,
+        "company": j.company,
+        "department": j.department,
+        "location": j.location,
+        "country": j.country,
+        "remote_type": j.remote_type,
+        "employment_type": j.employment_type,
+        "experience_level": j.experience_level,
+        "salary_range": j.salary_range,
+        "min_salary_lpa": j.min_salary_lpa,
+        "max_salary_lpa": j.max_salary_lpa,
+        "job_url": j.job_url,
+        "source_url": j.source_url,
+        "external_apply_url": j.external_apply_url,
+        "url": j.job_url,
+        "source": j.source,
+        "source_type": j.source_type,
+        "tags": j.raw_tags.split(", ") if j.raw_tags else [],
+        "raw_tags": j.raw_tags,
+        "description": j.description,
+        "hash_signature": j.hash_signature,
+        "is_bookmarked": False,
+        "status": j.status,
+        "verification_status": j.verification_status,
+        "first_seen": j.first_seen.isoformat() if j.first_seen else None,
+        "last_seen": j.last_seen.isoformat() if j.last_seen else None,
+        "last_verified": j.last_verified.isoformat() if j.last_verified else None,
+        "posted_at": j.posted_at.isoformat() if j.posted_at else None
+    }
 
 
 class ManualJobCreate(BaseModel):
@@ -262,6 +299,7 @@ async def user_search_jobs(
     remote_type: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -324,41 +362,7 @@ async def user_search_jobs(
         res_matching_db = await db.execute(stmt_db_match.order_by(desc(Job.last_seen), desc(Job.id)).limit(limit))
         db_matched_jobs = res_matching_db.scalars().all()
 
-        formatted_db_matched = [
-            {
-                "id": j.id,
-                "external_job_id": j.external_job_id,
-                "title": j.title,
-                "company": j.company,
-                "department": j.department,
-                "location": j.location,
-                "country": j.country,
-                "remote_type": j.remote_type,
-                "employment_type": j.employment_type,
-                "experience_level": j.experience_level,
-                "salary_range": j.salary_range,
-                "min_salary_lpa": j.min_salary_lpa,
-                "max_salary_lpa": j.max_salary_lpa,
-                "job_url": j.job_url,
-                "source_url": j.source_url,
-                "external_apply_url": j.external_apply_url,
-                "url": j.job_url,
-                "source": j.source,
-                "source_type": j.source_type,
-                "tags": j.raw_tags.split(", ") if j.raw_tags else [],
-                "raw_tags": j.raw_tags,
-                "description": j.description,
-                "hash_signature": j.hash_signature,
-                "is_bookmarked": j.is_bookmarked,
-                "status": j.status,
-                "verification_status": j.verification_status,
-                "first_seen": j.first_seen.isoformat() if j.first_seen else None,
-                "last_seen": j.last_seen.isoformat() if j.last_seen else None,
-                "last_verified": j.last_verified.isoformat() if j.last_verified else None,
-                "posted_at": j.posted_at.isoformat() if j.posted_at else None
-            }
-            for j in db_matched_jobs
-        ]
+        formatted_db_matched = [_serialize_job(j) for j in db_matched_jobs]
 
         # Combine DB matches (prioritizing manual admin & latest seen) with connector results
         combined_jobs = formatted_db_matched + deduped_jobs
@@ -380,7 +384,7 @@ async def user_search_jobs(
                     "limit": limit,
                     "total_pages": max(1, (len(final_search_jobs) + limit - 1) // limit)
                 },
-                "data": final_search_jobs[:limit]
+                "data": await annotate_bookmarks(db, current_user, final_search_jobs[:limit])
             }
 
     # DB Fallback query for seamless discovery feed when live search returns 0 or empty keyword
@@ -414,40 +418,7 @@ async def user_search_jobs(
     db_res = await db.execute(stmt)
     db_jobs = db_res.scalars().all()
 
-    formatted_db_jobs = [
-        {
-            "id": j.id,
-            "external_job_id": j.external_job_id,
-            "title": j.title,
-            "company": j.company,
-            "department": j.department,
-            "location": j.location,
-            "country": j.country,
-            "remote_type": j.remote_type,
-            "employment_type": j.employment_type,
-            "experience_level": j.experience_level,
-            "salary_range": j.salary_range,
-            "min_salary_lpa": j.min_salary_lpa,
-            "max_salary_lpa": j.max_salary_lpa,
-            "job_url": j.job_url,
-            "source_url": j.source_url,
-            "external_apply_url": j.external_apply_url,
-            "url": j.job_url,
-            "source": j.source,
-            "source_type": j.source_type,
-            "tags": j.raw_tags.split(", ") if j.raw_tags else [],
-            "raw_tags": j.raw_tags,
-            "description": j.description,
-            "is_bookmarked": j.is_bookmarked,
-            "status": j.status,
-            "verification_status": j.verification_status,
-            "first_seen": j.first_seen.isoformat() if j.first_seen else None,
-            "last_seen": j.last_seen.isoformat() if j.last_seen else None,
-            "last_verified": j.last_verified.isoformat() if j.last_verified else None,
-            "posted_at": j.posted_at.isoformat() if j.posted_at else None
-        }
-        for j in db_jobs
-    ]
+    formatted_db_jobs = await annotate_bookmarks(db, current_user, [_serialize_job(j) for j in db_jobs])
 
     return {
         "success": True,
@@ -529,7 +500,7 @@ async def list_jobs(
         if current_user:
             stmt = stmt.join(Bookmark, Bookmark.job_id == Job.id).where(Bookmark.user_id == current_user.id)
         else:
-            stmt = stmt.where(Job.is_bookmarked == True)
+            stmt = stmt.where(False)
 
     total_res = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total_records = total_res.scalar() or 0
@@ -540,41 +511,7 @@ async def list_jobs(
     res = await db.execute(stmt)
     jobs = res.scalars().all()
 
-    formatted_jobs = [
-        {
-            "id": j.id,
-            "external_job_id": j.external_job_id,
-            "title": j.title,
-            "company": j.company,
-            "department": j.department,
-            "location": j.location,
-            "country": j.country,
-            "remote_type": j.remote_type,
-            "employment_type": j.employment_type,
-            "experience_level": j.experience_level,
-            "salary_range": j.salary_range,
-            "min_salary_lpa": j.min_salary_lpa,
-            "max_salary_lpa": j.max_salary_lpa,
-            "job_url": j.job_url,
-            "source_url": j.source_url,
-            "external_apply_url": j.external_apply_url,
-            "url": j.job_url,
-            "source": j.source,
-            "source_type": j.source_type,
-            "tags": j.raw_tags.split(", ") if j.raw_tags else [],
-            "raw_tags": j.raw_tags,
-            "description": j.description,
-            "hash_signature": j.hash_signature,
-            "is_bookmarked": j.is_bookmarked,
-            "status": j.status,
-            "verification_status": j.verification_status,
-            "first_seen": j.first_seen.isoformat() if j.first_seen else None,
-            "last_seen": j.last_seen.isoformat() if j.last_seen else None,
-            "last_verified": j.last_verified.isoformat() if j.last_verified else None,
-            "posted_at": j.posted_at.isoformat() if j.posted_at else None
-        }
-        for j in jobs
-    ]
+    formatted_jobs = await annotate_bookmarks(db, current_user, [_serialize_job(j) for j in jobs])
 
     return {
         "success": True,
@@ -587,9 +524,32 @@ async def list_jobs(
         "data": formatted_jobs
     }
 
+@router.get("/bookmarks")
+async def list_my_bookmarks(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """The signed-in user's bookmarked jobs, most recently saved first (closed jobs included)."""
+    res = await db.execute(
+        select(Job)
+        .join(Bookmark, Bookmark.job_id == Job.id)
+        .where(Bookmark.user_id == current_user.id)
+        .order_by(desc(Bookmark.created_at), desc(Bookmark.id))
+    )
+    jobs = [_serialize_job(j) for j in res.scalars().unique().all()]
+    for j in jobs:
+        j["is_bookmarked"] = True
+
+    return {
+        "success": True,
+        "meta": {"total_records": len(jobs)},
+        "data": jobs
+    }
+
 @router.get("/{job_id}")
 async def get_job_detail(
     job_id: int,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(select(Job).where(Job.id == job_id))
@@ -598,6 +558,7 @@ async def get_job_detail(
         raise HTTPException(status_code=404, detail="Job not found")
 
     is_active = (j.status == "ACTIVE")
+    is_bookmarked = j.id in await bookmarked_job_ids(db, current_user, [j.id])
     return {
         "success": True,
         "data": {
@@ -622,7 +583,7 @@ async def get_job_detail(
             "tags": j.raw_tags.split(", ") if j.raw_tags else [],
             "raw_tags": j.raw_tags,
             "description": j.description,
-            "is_bookmarked": j.is_bookmarked,
+            "is_bookmarked": is_bookmarked,
             "status": j.status,
             "verification_status": j.verification_status,
             "is_active_opportunity": is_active,
@@ -654,7 +615,6 @@ async def toggle_bookmark(
         new_bm = Bookmark(job_id=job_id, user_id=current_user.id)
         db.add(new_bm)
         is_bookmarked = True
-    job.is_bookmarked = is_bookmarked
 
     await db.commit()
 

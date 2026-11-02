@@ -196,6 +196,83 @@ class TestWorkspaceIsolation(SecurityTestCase):
         self.assertTrue(res.json()["data"]["is_bookmarked"])
 
 
+class TestPerUserBookmarksAndDashboard(SecurityTestCase):
+    """Bookmarks, stars and dashboard counts belong to the signed-in user only."""
+
+    def setUp(self):
+        super().setUp()
+        admin = self.client_for(ADMIN_EMAIL, name="Admin")
+        self.job_a = admin.post("/api/v1/jobs/manual", json=TestAdminEndpoints.JOB).json()["data"]["id"]
+        self.job_b = admin.post("/api/v1/jobs/manual", json={
+            "title": "Frontend Engineer", "company": "Beta Labs", "job_url": "https://beta.example/jobs/2"
+        }).json()["data"]["id"]
+        self.alice = self.client_for("alice@example.com", name="Alice Smith")
+        self.bob = self.client_for("bob@example.com", name="Bob Jones")
+        self.anon = TestClient(app)
+
+    @staticmethod
+    def starred(client, path, **params):
+        return {j["id"] for j in client.get(path, params=params).json()["data"] if j["is_bookmarked"]}
+
+    def test_new_endpoints_require_login(self):
+        self.assertEqual(self.anon.get("/api/v1/jobs/bookmarks").status_code, 401)
+        self.assertEqual(self.anon.get("/api/v1/dashboard/overview").status_code, 401)
+
+    def test_bookmarks_list_is_per_user(self):
+        self.assertEqual(self.alice.get("/api/v1/jobs/bookmarks").json()["data"], [])
+        res = self.alice.post(f"/api/v1/jobs/{self.job_a}/bookmark")
+        self.assertTrue(res.json()["data"]["is_bookmarked"])
+
+        alice_bms = self.alice.get("/api/v1/jobs/bookmarks").json()["data"]
+        self.assertEqual([j["id"] for j in alice_bms], [self.job_a])
+        self.assertTrue(alice_bms[0]["is_bookmarked"])
+        self.assertEqual(self.bob.get("/api/v1/jobs/bookmarks").json()["data"], [])
+
+        # Toggling again removes it.
+        self.assertFalse(self.alice.post(f"/api/v1/jobs/{self.job_a}/bookmark").json()["data"]["is_bookmarked"])
+        self.assertEqual(self.alice.get("/api/v1/jobs/bookmarks").json()["data"], [])
+
+    def test_stars_in_feeds_are_per_user(self):
+        self.alice.post(f"/api/v1/jobs/{self.job_a}/bookmark")
+        self.bob.post(f"/api/v1/jobs/{self.job_b}/bookmark")
+
+        for path in ["/api/v1/jobs", "/api/v1/jobs/search"]:
+            self.assertEqual(self.starred(self.alice, path), {self.job_a}, path)
+            self.assertEqual(self.starred(self.bob, path), {self.job_b}, path)
+            self.assertEqual(self.starred(self.anon, path), set(), path)
+
+        detail = f"/api/v1/jobs/{self.job_a}"
+        self.assertTrue(self.alice.get(detail).json()["data"]["is_bookmarked"])
+        self.assertFalse(self.bob.get(detail).json()["data"]["is_bookmarked"])
+        self.assertFalse(self.anon.get(detail).json()["data"]["is_bookmarked"])
+
+    def test_bookmarked_only_filter_is_per_user(self):
+        self.alice.post(f"/api/v1/jobs/{self.job_a}/bookmark")
+        ids = lambda c: [j["id"] for j in c.get("/api/v1/jobs", params={"bookmarked_only": True}).json()["data"]]
+        self.assertEqual(ids(self.alice), [self.job_a])
+        self.assertEqual(ids(self.bob), [])
+        self.assertEqual(ids(self.anon), [])
+
+    def test_dashboard_counts_are_per_user(self):
+        self.alice.post(f"/api/v1/jobs/{self.job_a}/bookmark")
+        self.alice.post(f"/api/v1/jobs/{self.job_b}/bookmark")
+        self.alice.post("/api/v1/applications", json={"company": "Stripe", "role": "SDE", "status": "Applied"})
+        self.alice.post("/api/v1/applications", json={"company": "Acme", "role": "SDE", "status": "Interview"})
+        self.bob.post("/api/v1/applications", json={"company": "Beta", "role": "SDE", "status": "Offer"})
+
+        alice = self.alice.get("/api/v1/dashboard/overview").json()
+        self.assertEqual(alice["user_name"], "Alice Smith")
+        self.assertEqual(alice["overview"]["bookmarked_jobs"], 2)
+        self.assertEqual(alice["overview"]["applications"], 2)
+        self.assertEqual(alice["pipeline"], {"saved": 0, "applied": 1, "oa_test": 0, "interview": 1, "offer": 0})
+
+        bob = self.bob.get("/api/v1/dashboard/overview").json()
+        self.assertEqual(bob["user_name"], "Bob Jones")
+        self.assertEqual(bob["overview"]["bookmarked_jobs"], 0)
+        self.assertEqual(bob["overview"]["applications"], 1)
+        self.assertEqual(bob["pipeline"], {"saved": 0, "applied": 0, "oa_test": 0, "interview": 0, "offer": 1})
+
+
 class TestPublicJobDiscovery(SecurityTestCase):
     """Anonymous visitors can browse jobs; only personal features need an account."""
 

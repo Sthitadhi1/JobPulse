@@ -9,7 +9,7 @@ from backend.app.engine.scheduler import SchedulerEngine
 from backend.app.notifications.telegram import TelegramNotificationService
 from sqlalchemy.future import select
 from backend.app.database import Base
-from backend.app.models.job import Job, SavedSearch
+from backend.app.models.job import Job, SavedSearch, Bookmark, User
 from backend.app.models.search_request import SearchRequest
 from backend.app.models.application import JobApplication
 
@@ -383,6 +383,7 @@ class TestJobPulseEngine(unittest.TestCase):
             from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
             from backend.app.main import app
             from backend.app.database import get_db
+            from backend.app.api.auth import get_current_user_optional
             from fastapi.testclient import TestClient
 
             engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
@@ -402,8 +403,7 @@ class TestJobPulseEngine(unittest.TestCase):
                         job_url=f"https://example.com/pg-act-{i}",
                         source_url="https://example.com/source",
                         hash_signature=f"hash-pg-act-{i}",
-                        status="ACTIVE",
-                        is_bookmarked=(i == 0)
+                        status="ACTIVE"
                     )
                     for i in range(120)
                 ]
@@ -416,12 +416,17 @@ class TestJobPulseEngine(unittest.TestCase):
                         job_url=f"https://example.com/pg-rem-{i}",
                         source_url="https://example.com/source",
                         hash_signature=f"hash-pg-rem-{i}",
-                        status="REMOVED",
-                        is_bookmarked=(i == 0)
+                        status="REMOVED"
                     )
                     for i in range(80)
                 ]
-                session.add_all(active_jobs + removed_jobs)
+                user = User(name="Reader", email="reader@example.com", password_hash="x")
+                session.add_all(active_jobs + removed_jobs + [user])
+                await session.commit()
+                session.add_all([
+                    Bookmark(user_id=user.id, job_id=active_jobs[0].id),
+                    Bookmark(user_id=user.id, job_id=removed_jobs[0].id)
+                ])
                 await session.commit()
 
                 async def override_get_db():
@@ -446,11 +451,17 @@ class TestJobPulseEngine(unittest.TestCase):
                 d_p3 = res_p3.json()
                 self.assertEqual(len(d_p3["data"]), 20)
 
-                # Bookmarks filter check: returns only ACTIVE bookmarked job
+                # Bookmarks filter is per user: anonymous callers get none
+                d_anon = client.get("/api/v1/jobs?bookmarked_only=true").json()
+                self.assertEqual(d_anon["meta"]["total_records"], 0)
+
+                # Signed in: returns only the user's ACTIVE bookmarked job
+                app.dependency_overrides[get_current_user_optional] = lambda: user
                 res_bm = client.get("/api/v1/jobs?bookmarked_only=true")
                 d_bm = res_bm.json()
                 self.assertEqual(d_bm["meta"]["total_records"], 1)
                 self.assertEqual(d_bm["data"][0]["hash_signature"], "hash-pg-act-0")
+                self.assertTrue(d_bm["data"][0]["is_bookmarked"])
 
                 app.dependency_overrides.clear()
 

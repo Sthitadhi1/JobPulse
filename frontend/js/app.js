@@ -606,29 +606,32 @@ async function loadDashboardOverview() {
       headers: getAuthHeaders()
     });
     if (res.ok) {
-      const result = await res.json();
-      const d = result.data;
-      if (d) {
+      const d = await res.json();
+      if (d.success) {
         // 1. Greeting
-        const greetingEl = document.getElementById('dashboard-greeting');
+        const greetingEl = document.getElementById('dashboard-user-greeting');
         if (greetingEl) {
-          const userName = currentUser ? currentUser.name.split(' ')[0] : 'Engineer';
-          greetingEl.textContent = `${d.greeting}, ${userName} 👋`;
+          const fullName = d.user_name || (currentUser && currentUser.name) || '';
+          const firstName = fullName.trim().split(' ')[0] || 'there';
+          const hour = new Date().getHours();
+          const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+          greetingEl.textContent = `${greeting}, ${firstName} 👋`;
         }
 
         // 2. Stat Cards
-        document.getElementById('dash-stat-active-jobs').textContent = (d.stats.active_jobs || 0).toLocaleString();
-        document.getElementById('dash-stat-top-matches').textContent = (d.stats.top_matches || 30).toLocaleString();
-        document.getElementById('dash-stat-applications').textContent = (d.stats.applications || 0).toLocaleString();
-        document.getElementById('dash-stat-bookmarked').textContent = (d.stats.bookmarked || 0).toLocaleString();
+        const o = d.overview || {};
+        document.getElementById('dash-stat-active-jobs').textContent = (o.active_jobs || 0).toLocaleString();
+        document.getElementById('dash-stat-top-matches').textContent = (o.top_matches || 0).toLocaleString();
+        document.getElementById('dash-stat-applications').textContent = (o.applications || 0).toLocaleString();
+        document.getElementById('dash-stat-bookmarked').textContent = (o.bookmarked_jobs || 0).toLocaleString();
 
         // 3. Pipeline counts
         const p = d.pipeline || {};
-        document.getElementById('dash-pipe-saved').textContent = p.Saved || 0;
-        document.getElementById('dash-pipe-applied').textContent = p.Applied || 0;
-        document.getElementById('dash-pipe-oa').textContent = p['OA / Test'] || 0;
-        document.getElementById('dash-pipe-interview').textContent = p.Interview || 0;
-        document.getElementById('dash-pipe-offer').textContent = p.Offer || 0;
+        document.getElementById('dash-pipe-saved').textContent = p.saved || 0;
+        document.getElementById('dash-pipe-applied').textContent = p.applied || 0;
+        document.getElementById('dash-pipe-oa').textContent = p.oa_test || 0;
+        document.getElementById('dash-pipe-interview').textContent = p.interview || 0;
+        document.getElementById('dash-pipe-offer').textContent = p.offer || 0;
 
         // 4. Top Matches Preview
         const previewContainer = document.getElementById('dashboard-top-matches-preview-container');
@@ -1234,7 +1237,7 @@ async function toggleBookmark(jobId, btnEl) {
     });
     if (res.ok) {
       const result = await res.json();
-      const isBookmarked = result.is_bookmarked;
+      const isBookmarked = !!(result.data && result.data.is_bookmarked);
       if (btnEl) {
         btnEl.textContent = isBookmarked ? '★' : '☆';
         btnEl.classList.toggle('bookmarked', isBookmarked);
@@ -1257,11 +1260,16 @@ async function loadBookmarksFeed() {
       headers: getAuthHeaders()
     });
     const result = await res.json();
-    if (result.success) {
-      renderJobsGrid(container, result.data);
+    if (!res.ok || !result.success) {
+      throw new Error(result.detail || `HTTP ${res.status}`);
     }
+    if (result.data.length === 0) {
+      container.innerHTML = '<div class="card card-padded text-muted">No bookmarks yet. Tap ☆ on any job to save it here.</div>';
+      return;
+    }
+    renderJobsGrid(container, result.data);
   } catch (err) {
-    container.innerHTML = `<div class="card card-padded text-muted">Error loading bookmarks: ${err.message}</div>`;
+    container.innerHTML = `<div class="card card-padded text-muted">Error loading bookmarks: ${escapeHtml(err.message)}</div>`;
   }
 }
 
