@@ -14,6 +14,21 @@ let selectedSalaryMax = null;
 
 let selectedResumeFile = null;
 
+// Job discovery is public. These tabs hold personal data, so signed-out visitors get the sign-in modal instead.
+const ACCOUNT_TABS = {
+  'dashboard': 'Sign in to see your personal job search dashboard.',
+  'resume-match': 'Sign in to match your resume against live jobs.',
+  'searches': 'Sign in to save searches and get alerts for new matching jobs.',
+  'applications': 'Sign in to track your applications on a Kanban board.',
+  'bookmarks': 'Sign in to bookmark jobs and come back to them later.',
+  'telegram': 'Sign in to get instant Telegram alerts for new jobs.',
+  'profile': 'Sign in to manage your account.'
+};
+const DEFAULT_AUTH_PROMPT = 'Sign in or create a free account to track applications, save searches and get job alerts.';
+
+let activeTab = 'jobs';
+let pendingTabAfterLogin = null;
+
 function getAuthHeaders() {
   const token = localStorage.getItem('jobpulse_token');
   const headers = { 'Content-Type': 'application/json' };
@@ -38,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSpotlightEffect();
 
   // Check auth state on load
-  checkAuthState();
+  checkAuthState({ initial: true });
 });
 
 /* ==========================================================================
@@ -68,26 +83,23 @@ function initAuthentication() {
   const tabSignup = document.getElementById('auth-tab-signup');
   const forgotLink = document.getElementById('auth-forgot-link');
 
-  // Auth Screen Tabs
-  if (tabLogin && tabSignup) {
-    tabLogin.addEventListener('click', () => {
-      tabLogin.classList.add('active');
-      tabSignup.classList.remove('active');
-      loginForm.classList.remove('hidden');
-      signupForm.classList.add('hidden');
-    });
+  // Auth Modal Tabs
+  tabLogin?.addEventListener('click', () => setAuthMode('login'));
+  tabSignup?.addEventListener('click', () => setAuthMode('signup'));
 
-    tabSignup.addEventListener('click', () => {
-      tabSignup.classList.add('active');
-      tabLogin.classList.remove('active');
-      signupForm.classList.remove('hidden');
-      loginForm.classList.add('hidden');
-    });
-  }
+  document.getElementById('header-signin-btn')?.addEventListener('click', () => openAuthModal());
+  document.getElementById('close-auth-modal')?.addEventListener('click', closeAuthModal);
+  document.getElementById('auth-screen')?.addEventListener('click', (e) => {
+    if (e.target.id === 'auth-screen') closeAuthModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAuthModal();
+  });
 
   if (forgotLink) {
     forgotLink.addEventListener('click', (e) => {
       e.preventDefault();
+      document.getElementById('auth-screen')?.classList.add('hidden');
       const modal = document.getElementById('forgot-password-modal');
       if (modal) {
         modal.classList.remove('hidden');
@@ -232,10 +244,6 @@ function initAuthentication() {
         document.getElementById('forgot-step-1')?.classList.add('hidden');
         document.getElementById('forgot-step-2')?.classList.remove('hidden');
 
-        if (result.otp_code) {
-          document.getElementById('reset-otp-input').value = result.otp_code;
-        }
-
         const msg2 = document.getElementById('reset-otp-msg');
         if (msg2) {
           msg2.textContent = result.message || 'Reset code sent!';
@@ -359,10 +367,38 @@ function initAuthentication() {
   document.getElementById('profile-logout-btn')?.addEventListener('click', handleLogout);
 }
 
-async function checkAuthState() {
-  const authScreen = document.getElementById('auth-screen');
-  const appWorkspace = document.getElementById('app-workspace');
+function setAuthMode(mode) {
+  const isSignup = mode === 'signup';
+  document.getElementById('auth-tab-login')?.classList.toggle('active', !isSignup);
+  document.getElementById('auth-tab-signup')?.classList.toggle('active', isSignup);
+  document.getElementById('auth-login-form')?.classList.toggle('hidden', isSignup);
+  document.getElementById('auth-signup-form')?.classList.toggle('hidden', !isSignup);
+}
 
+function openAuthModal(message = DEFAULT_AUTH_PROMPT, tabAfterLogin = null) {
+  pendingTabAfterLogin = tabAfterLogin;
+  const promptEl = document.getElementById('auth-prompt-msg');
+  if (promptEl) promptEl.textContent = message;
+  document.getElementById('auth-login-msg')?.classList.add('hidden');
+  document.getElementById('auth-signup-msg')?.classList.add('hidden');
+  setAuthMode('login');
+  document.getElementById('auth-screen')?.classList.remove('hidden');
+  document.getElementById('auth-login-email')?.focus();
+}
+
+function closeAuthModal() {
+  pendingTabAfterLogin = null;
+  document.getElementById('auth-screen')?.classList.add('hidden');
+}
+
+// Returns true when signed in; otherwise opens the sign-in modal with the given reason.
+function requireAuth(message) {
+  if (currentUser) return true;
+  openAuthModal(message);
+  return false;
+}
+
+async function checkAuthState({ initial = false } = {}) {
   try {
     const res = await fetch(`${API_BASE}/auth/me`, {
       headers: getAuthHeaders()
@@ -373,12 +409,10 @@ async function checkAuthState() {
         currentUser = data.user;
         localStorage.setItem('jobpulse_user', JSON.stringify(data.user));
         updateHeaderUserUI(data.user);
-        
-        authScreen?.classList.add('hidden');
-        appWorkspace?.classList.remove('hidden');
 
-        // Render default landing view post-login: Dashboard Command Center
-        switchTab('dashboard');
+        const nextTab = pendingTabAfterLogin || (initial ? 'dashboard' : activeTab);
+        closeAuthModal();
+        switchTab(nextTab);
         return;
       }
     }
@@ -386,15 +420,29 @@ async function checkAuthState() {
     console.warn('Auth check warning:', err);
   }
 
-  // Unauthenticated -> Show Auth Screen
+  // Signed out: job discovery stays open, account features ask for sign-in
   currentUser = null;
   localStorage.removeItem('jobpulse_token');
   localStorage.removeItem('jobpulse_user');
-  authScreen?.classList.remove('hidden');
-  appWorkspace?.classList.add('hidden');
+  updateHeaderUserUI(null);
+  if (initial) switchTab('jobs');
 }
 
 function updateHeaderUserUI(user) {
+  const signedIn = Boolean(user);
+  document.getElementById('header-signin-btn')?.classList.toggle('hidden', signedIn);
+  ['header-user-profile', 'notif-bell', 'sync-now-btn'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('hidden', !signedIn);
+  });
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.toggle('nav-locked', !signedIn && item.getAttribute('data-tab') in ACCOUNT_TABS);
+  });
+  // Job posting is restricted to accounts listed in the server's ADMIN_EMAILS.
+  ['post-job-top-btn', 'post-job-feed-btn'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('hidden', !(user && user.is_admin));
+  });
+  if (!user) return;
+
   const avatarEl = document.getElementById('header-user-avatar');
   const nameEl = document.getElementById('header-user-name');
   const emailEl = document.getElementById('dropdown-user-email');
@@ -407,6 +455,10 @@ function updateHeaderUserUI(user) {
   }
   if (emailEl && user.email) {
     emailEl.textContent = user.email;
+  }
+  const tgInput = document.getElementById('telegram-chat-id-input');
+  if (tgInput && user.telegram_chat_id && !tgInput.value) {
+    tgInput.value = user.telegram_chat_id;
   }
 }
 
@@ -423,8 +475,9 @@ async function handleLogout() {
     currentUser = null;
     localStorage.removeItem('jobpulse_token');
     localStorage.removeItem('jobpulse_user');
-    document.getElementById('auth-screen')?.classList.remove('hidden');
-    document.getElementById('app-workspace')?.classList.add('hidden');
+    updateHeaderUserUI(null);
+    document.getElementById('header-profile-dropdown')?.classList.add('hidden');
+    switchTab('jobs');
   }
 }
 
@@ -457,6 +510,12 @@ function initNavigation() {
 }
 
 function switchTab(tabTarget) {
+  if (!currentUser && tabTarget in ACCOUNT_TABS) {
+    openAuthModal(ACCOUNT_TABS[tabTarget], tabTarget);
+    return;
+  }
+  activeTab = tabTarget;
+
   const navItems = document.querySelectorAll('.nav-item');
   const tabPanes = document.querySelectorAll('.tab-pane');
 
@@ -935,6 +994,7 @@ function toggleAccordion(contentId) {
 }
 
 async function trackJobInKanban(company, role, jobId) {
+  if (!requireAuth('Sign in to track this application on your Kanban board.')) return;
   try {
     const res = await fetch(`${API_BASE}/applications/`, {
       method: 'POST',
@@ -990,6 +1050,7 @@ function initSearchAndFilters() {
   const bookmarkBtn = document.getElementById('bookmarked-only-btn');
   if (bookmarkBtn) {
     bookmarkBtn.addEventListener('click', () => {
+      if (!requireAuth(ACCOUNT_TABS['bookmarks'])) return;
       isBookmarkedOnlyFilter = !isBookmarkedOnlyFilter;
       bookmarkBtn.classList.toggle('active', isBookmarkedOnlyFilter);
       loadJobsFeed(true);
@@ -1073,7 +1134,7 @@ async function loadJobsFeed(reset = false) {
     if (res.ok) {
       const result = await res.json();
       const newJobs = result.data || [];
-      totalFeedRecords = result.total || newJobs.length;
+      totalFeedRecords = result.meta?.total_records ?? result.total ?? newJobs.length;
       totalFeedPages = Math.ceil(totalFeedRecords / 20) || 1;
 
       if (countBadge) {
@@ -1165,6 +1226,7 @@ function renderJobsGrid(container, jobs) {
 }
 
 async function toggleBookmark(jobId, btnEl) {
+  if (!requireAuth(ACCOUNT_TABS['bookmarks'])) return;
   try {
     const res = await fetch(`${API_BASE}/jobs/${jobId}/bookmark`, {
       method: 'POST',
@@ -1383,7 +1445,7 @@ async function dropToColumn(e, newStatus) {
 
   try {
     const res = await fetch(`${API_BASE}/applications/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: getAuthHeaders(),
       body: JSON.stringify({ status: newStatus })
     });
@@ -1479,6 +1541,7 @@ async function loadConnectorHealth() {
 }
 
 async function triggerManualSync() {
+  if (!requireAuth('Sign in with an admin account to sync job sources.')) return;
   showToast('⚡ Triggering multi-connector discovery cycle in background...', 'info');
   try {
     const res = await fetch(`${API_BASE}/admin/discover`, {
@@ -1501,36 +1564,31 @@ async function triggerManualSync() {
    10. TELEGRAM NOTIFICATIONS
    ========================================================================== */
 function initTelegramView() {
-  document.getElementById('save-telegram-btn')?.addEventListener('click', async () => {
-    const chatId = document.getElementById('telegram-chat-id-input')?.value.trim();
+  document.getElementById('send-telegram-test-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('telegram-chat-id-input');
+    const resultEl = document.getElementById('telegram-test-result');
+    const chatId = input?.value.trim();
     if (!chatId) {
       showToast('Please enter your numeric Telegram Chat ID.', 'warning');
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE}/notifications/telegram/connect`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ chat_id: chatId })
-      });
-      if (res.ok) {
-        showToast('Telegram alerts connected successfully!', 'success');
-      }
-    } catch (err) {
-      showToast('Error connecting Telegram: ' + err.message, 'error');
-    }
-  });
-
-  document.getElementById('send-test-alert-btn')?.addEventListener('click', async () => {
     showToast('Sending test job alert...', 'info');
     try {
       const res = await fetch(`${API_BASE}/notifications/telegram/test`, {
         method: 'POST',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ chat_id: chatId })
       });
-      if (res.ok) {
-        showToast('Test notification dispatched to your Telegram!', 'success');
+      const result = await res.json();
+      const delivered = res.ok && result.delivered_via_api;
+      if (resultEl) {
+        resultEl.textContent = result.message || result.detail || 'Could not send test alert.';
+        resultEl.className = `alert mt-3 ${delivered ? 'alert-success' : 'alert-error'}`;
+      }
+      if (delivered && currentUser) {
+        currentUser.telegram_chat_id = chatId;
+        currentUser.telegram_connected = true;
       }
     } catch (err) {
       showToast('Error sending test alert: ' + err.message, 'error');
@@ -1672,6 +1730,7 @@ function initModals() {
   });
 
   document.getElementById('save-current-search-btn')?.addEventListener('click', () => {
+    if (!requireAuth(ACCOUNT_TABS['searches'])) return;
     const currentKeyword = document.getElementById('job-search-input')?.value.trim();
     if (currentKeyword) {
       document.getElementById('modal-search-query').value = currentKeyword;

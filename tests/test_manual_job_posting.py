@@ -4,15 +4,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
+from backend.app.config import settings
 from backend.app.database import Base, get_db
 from backend.app.main import app
+
+ADMIN_EMAIL = "admin@jobpulse.test"
 
 
 class TestManualJobPosting(unittest.TestCase):
     def setUp(self):
         self.engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
         self.TestingSessionLocal = sessionmaker(
-            autocommit=False, autoflush=False, bind=self.engine, class_=AsyncSession
+            autocommit=False, autoflush=False, bind=self.engine, class_=AsyncSession, expire_on_commit=False
         )
 
         async def setup_db():
@@ -26,10 +29,19 @@ class TestManualJobPosting(unittest.TestCase):
                 yield session
 
         app.dependency_overrides[get_db] = override_get_db
+        self._orig_admin_emails = settings.ADMIN_EMAILS
+        settings.ADMIN_EMAILS = ADMIN_EMAIL
         self.client = TestClient(app)
+
+        # Job posting is admin-only; the signup session cookie authenticates later calls.
+        signup = self.client.post("/api/v1/auth/signup", json={
+            "name": "Site Admin", "email": ADMIN_EMAIL, "password": "AdminPass123"
+        })
+        self.assertEqual(signup.status_code, 201)
 
     def tearDown(self):
         app.dependency_overrides.clear()
+        settings.ADMIN_EMAILS = self._orig_admin_emails
 
     def test_create_manual_job_success(self):
         payload = {

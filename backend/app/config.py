@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     SECURE_COOKIES: bool = os.getenv("SECURE_COOKIES", "False").lower() in ("true", "1", "yes")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "jobpulse-secret-key-change-in-production-32bytes!")
     SESSION_SECRET: str = os.getenv("SESSION_SECRET", "jobpulse-session-secret-change-in-production!")
-    SCHEDULER_SECRET: str = os.getenv("SCHEDULER_SECRET", "jobpulse-internal-scheduler-secret")
+    # Empty by default: secret-based access stays disabled until an operator sets a real value.
+    SCHEDULER_SECRET: str = os.getenv("SCHEDULER_SECRET", "")
+    # Comma-separated list of account emails allowed to post/unlist jobs and trigger crawls.
+    ADMIN_EMAILS: str = os.getenv("ADMIN_EMAILS", "")
     CONNECTOR_MAX_CONCURRENCY: int = int(os.getenv("CONNECTOR_MAX_CONCURRENCY", "5"))
     DISCOVERY_INTERVAL_SECONDS: int = int(os.getenv("DISCOVERY_INTERVAL_SECONDS", "60" if os.getenv("ENVIRONMENT", "development") == "development" else "3600"))
     DISCOVERY_LOCK_TIMEOUT_SECONDS: int = int(os.getenv("DISCOVERY_LOCK_TIMEOUT_SECONDS", "900" if os.getenv("ENVIRONMENT", "development") == "development" else "3600"))

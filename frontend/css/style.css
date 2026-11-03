@@ -856,6 +856,30 @@ body {
   z-index: 2;
 }
 
+/* Sign-in modal: scrolls on short screens */
+.auth-modal {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.auth-modal .auth-card {
+  margin: auto;
+}
+
+.auth-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+/* Sidebar tabs that need an account, shown while signed out */
+.nav-item.nav-locked::after {
+  content: '🔒';
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 .auth-header {
   text-align: center;
   margin-bottom: 24px;

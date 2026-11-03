@@ -12,19 +12,17 @@ from sqlalchemy import func
 from backend.app.database import get_db
 from backend.app.models.application import JobApplication, ApplicationTimeline
 from backend.app.models.job import User
-from backend.app.api.auth import get_current_user_optional
+from backend.app.api.auth import get_current_user
 
 router = APIRouter(prefix="/applications", tags=["Applications Workspace"])
 
 @router.get("")
 async def list_applications(
     status: Optional[str] = Query(None),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(JobApplication)
-    if current_user:
-        stmt = stmt.where((JobApplication.user_id == current_user.id) | (JobApplication.user_id == "default_user"))
+    stmt = select(JobApplication).where(JobApplication.user_id == current_user.id)
     if status:
         stmt = stmt.where(JobApplication.status == status)
     stmt = stmt.order_by(JobApplication.updated_at.desc())
@@ -76,7 +74,7 @@ async def list_applications(
 @router.post("")
 async def create_application(
     data: dict,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     company = data.get("company")
@@ -84,10 +82,8 @@ async def create_application(
     if not company or not role:
         raise HTTPException(status_code=400, detail="Company and Role are required.")
 
-    user_id = current_user.id if current_user else "default_user"
-
     app = JobApplication(
-        user_id=user_id,
+        user_id=current_user.id,
         company=company,
         role=role,
         source=data.get("source", "Manual"),
@@ -122,7 +118,7 @@ async def create_application(
 async def update_application(
     app_id: int,
     data: dict,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(select(JobApplication).where(JobApplication.id == app_id))
@@ -130,9 +126,8 @@ async def update_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
-    if app.user_id and app.user_id != "default_user":
-        if not current_user or app.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden. You do not own this application record.")
+    if app.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden. You do not own this application record.")
 
     old_status = app.status
     new_status = data.get("status", old_status)
@@ -166,7 +161,7 @@ async def update_application(
 @router.delete("/{app_id}")
 async def delete_application(
     app_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(select(JobApplication).where(JobApplication.id == app_id))
@@ -174,9 +169,8 @@ async def delete_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
-    if app.user_id and app.user_id != "default_user":
-        if not current_user or app.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden. You do not own this application record.")
+    if app.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden. You do not own this application record.")
 
     await db.delete(app)
     await db.commit()
@@ -186,6 +180,7 @@ async def delete_application(
 @router.post("/import")
 async def import_applications_csv(
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -212,6 +207,7 @@ async def import_applications_csv(
         # Check duplicate
         dup_res = await db.execute(
             select(JobApplication).where(
+                JobApplication.user_id == current_user.id,
                 JobApplication.company.ilike(company.strip()),
                 JobApplication.role.ilike(role.strip())
             )
@@ -221,6 +217,7 @@ async def import_applications_csv(
             continue
 
         app = JobApplication(
+            user_id=current_user.id,
             company=company.strip(),
             role=role.strip(),
             source=row.get("Source", "CSV Import"),
@@ -242,12 +239,15 @@ async def import_applications_csv(
 @router.get("/export")
 async def export_applications(
     format: str = Query("csv", pattern="^(csv|json)$"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     PART 10 — Application Exporter (CSV / JSON)
     """
-    res = await db.execute(select(JobApplication).order_by(JobApplication.id.asc()))
+    res = await db.execute(
+        select(JobApplication).where(JobApplication.user_id == current_user.id).order_by(JobApplication.id.asc())
+    )
     apps = res.scalars().all()
 
     if format == "json":

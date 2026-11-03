@@ -1,0 +1,36 @@
+name: Bug report
+description: Something in JobPulse isn't working as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to Discover Jobs
+        2. Filter by ...
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did you see it?
+      options:
+        - Live demo (jobpulse-2z2f.onrender.com)
+        - Self-hosted / local
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Browser console errors, server logs, or screenshots help a lot.
+      render: shell

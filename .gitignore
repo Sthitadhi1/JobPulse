@@ -4,9 +4,11 @@
 !.env.example
 backend/app/.env
 
-# Databases
+# Databases (including SQLite WAL side files)
 *.db
-jobpulse.db
+*.db-shm
+*.db-wal
+*.db-journal
 
 # Python bytecode
 __pycache__/
@@ -30,5 +32,27 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Markdown documentation files
-*.md
+# Local planning notes (kept out of the public repo). Contributor-facing docs live in
+# README.md, docs/ and .github/.
+/API_SPEC.md
+/ARCHITECTURE_DECISIONS.md
+/CONTRIBUTING.md
+/DATABASE_DESIGN.md
+/DEPLOYMENT.md
+/IMPLEMENTATION_GUIDE.md
+/MATCHING_ENGINE.md
+/NOTIFICATION_ENGINE.md
+/PLUGIN_SDK.md
+/PRD.md
+/PROJECT_INTRO.md
+/ROADMAP.md
+/SCRAPER_ENGINE.md
+/SEARCH_ENGINE.md
+/SYSTEM_DESIGN.md
+/TOP_100_*.md
+/UI_UX*.md
+
+# Test / tooling caches
+.pytest_cache/
+.coverage
+htmlcov/

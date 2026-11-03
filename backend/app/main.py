@@ -116,7 +116,7 @@ app.include_router(ai_router, prefix=prefix)
 app.include_router(applications_router, prefix=prefix)
 app.include_router(dashboard_router, prefix=prefix)
 
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, PlainTextResponse
 
 # Mount static frontend dashboard
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend")
@@ -136,6 +136,11 @@ if os.path.exists(frontend_dir):
 @app.get("/")
 async def root():
     return RedirectResponse(url="/dashboard/", status_code=307)
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    # Job pages are public and meant to be indexed; the SPA fetches jobs from /api, so it stays crawlable.
+    return "User-agent: *\nAllow: /\n"
 
 @app.get("/api/v1/health")
 @app.get("/ping")

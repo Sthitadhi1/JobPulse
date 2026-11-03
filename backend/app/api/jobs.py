@@ -10,7 +10,7 @@ from sqlalchemy import func, desc, or_
 
 from backend.app.database import get_db
 from backend.app.models.job import Job, Bookmark, ApplicationTracker, User
-from backend.app.api.auth import get_current_user_optional
+from backend.app.api.auth import get_current_user, get_current_user_optional, require_admin
 from backend.app.models.search_request import SearchRequest
 from backend.app.engine.search import SearchEngine
 from backend.app.engine.normalizer import NormalizerEngine, URLNormalizerValidator
@@ -45,7 +45,7 @@ class ManualJobCreate(BaseModel):
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_manual_job(
     req: ManualJobCreate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: Optional[User] = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -228,11 +228,11 @@ async def create_manual_job(
 @router.delete("/{job_id}")
 async def delete_job(
     job_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: Optional[User] = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Allows admins / users to delete or unlist a job listing from the portal.
+    Allows admins to unlist a job listing from the portal.
     """
     res = await db.execute(select(Job).where(Job.id == job_id))
     job = res.scalars().first()
@@ -637,7 +637,7 @@ async def get_job_detail(
 @router.post("/{job_id}/bookmark")
 async def toggle_bookmark(
     job_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     res = await db.execute(select(Job).where(Job.id == job_id))
@@ -645,22 +645,16 @@ async def toggle_bookmark(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    user_id = current_user.id if current_user else None
-
-    if user_id:
-        bm_res = await db.execute(select(Bookmark).where(Bookmark.job_id == job_id, Bookmark.user_id == user_id))
-        bm = bm_res.scalars().first()
-        if bm:
-            await db.delete(bm)
-            is_bookmarked = False
-        else:
-            new_bm = Bookmark(job_id=job_id, user_id=user_id)
-            db.add(new_bm)
-            is_bookmarked = True
-        job.is_bookmarked = is_bookmarked
+    bm_res = await db.execute(select(Bookmark).where(Bookmark.job_id == job_id, Bookmark.user_id == current_user.id))
+    bm = bm_res.scalars().first()
+    if bm:
+        await db.delete(bm)
+        is_bookmarked = False
     else:
-        job.is_bookmarked = not job.is_bookmarked
-        is_bookmarked = job.is_bookmarked
+        new_bm = Bookmark(job_id=job_id, user_id=current_user.id)
+        db.add(new_bm)
+        is_bookmarked = True
+    job.is_bookmarked = is_bookmarked
 
     await db.commit()
 

@@ -6,6 +6,7 @@
 
 *Continuously monitor 300+ company career pages, 12+ ATS platforms, and job sources in real-time. Discover verified tech opportunities, match resumes with AI-driven scoring, and track applications with a Kanban workspace.*
 
+[![Tests](https://img.shields.io/github/actions/workflow/status/Sthitadhi1/JobPulse/tests.yml?branch=master&style=for-the-badge&label=tests)](https://github.com/Sthitadhi1/JobPulse/actions/workflows/tests.yml)
 [![GitHub stars](https://img.shields.io/github/stars/Sthitadhi1/JobPulse?style=for-the-badge&color=gold)](https://github.com/Sthitadhi1/JobPulse/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/Sthitadhi1/JobPulse?style=for-the-badge&color=blue)](https://github.com/Sthitadhi1/JobPulse/network)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge&logo=python)](https://python.org)
@@ -189,18 +190,29 @@ pip install -r requirements.txt
 ```
 
 ### 4. Configure Environment Variables (Optional)
-Create a `.env` file in the root directory:
-```env
-TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
-SECRET_KEY="your_secure_random_key"
-ENABLE_SCHEDULER="true"
+Defaults work for local development. To customise, copy the template and edit it:
+```bash
+cp .env.example .env
 ```
+
+| Variable | Purpose |
+|:--|:--|
+| `ADMIN_EMAILS` | Comma-separated emails allowed to post/unlist jobs and trigger crawls |
+| `SCHEDULER_SECRET` | Shared secret for cron calls to `/api/v1/admin/connectors/*` (empty = disabled) |
+| `SMTP_HOST`, `SMTP_USERNAME`, ... | Email delivery for password-reset codes (without it, codes print to the server log) |
+| `TELEGRAM_BOT_TOKEN` | Bot used for saved-search alerts |
+| `DATABASE_URL` | SQLite by default; `postgresql+asyncpg://...` for Postgres |
 
 ### 5. Launch Development Server
 ```bash
 python run_dev.py
 ```
 Open **`http://localhost:8000/dashboard/`** in your browser. API specifications are accessible at **`http://localhost:8000/docs`**.
+
+### 6. Run the Tests
+```bash
+python -m unittest discover -s tests -v
+```
 
 ---
 
@@ -245,9 +257,13 @@ Render Free web services spin down after 15 minutes of inactivity. To keep your 
 
 # 🔐 Authentication & Security
 
-- **Session Security**: Dual Bearer Token in `localStorage` + HTTP-Only Cookie support ensuring seamless cross-origin and iframe authentication.
-- **2-Step Direct Password Reset**: In-modal OTP and reset token flow allowing instant password changes without external SMTP dependencies.
-- **Zero Third-Party Scraping**: JobPulse never asks for or stores user credentials for external websites. All jobs are indexed through public endpoints and official APIs.
+- **Session Security**: Bearer token + HTTP-only cookie sessions; sessions are rotated on login and password reset.
+- **Private Workspaces**: Applications, saved searches, and alert logs are scoped to the signed-in account.
+- **Admin-Only Operations**: Posting/unlisting jobs and triggering crawls require an account in `ADMIN_EMAILS` (or the `SCHEDULER_SECRET` for automation).
+- **Email OTP Password Reset**: 6-digit codes are delivered by email, expire after `OTP_EXPIRY_MINUTES`, and lock after 5 wrong attempts.
+- **No Credential Harvesting**: JobPulse never asks for or stores your credentials for other websites. Most jobs come from employers' public ATS job-board APIs.
+
+Found a vulnerability? Please report it privately; see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -270,18 +286,17 @@ Render Free web services spin down after 15 minutes of inactivity. To keep your 
 
 # 🤝 Contributing
 
-Contributions are welcome! To contribute:
-1. Fork the Project.
-2. Create a Feature Branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your Changes (`git commit -m 'feat: Add AmazingFeature'`).
-4. Push to the Branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
+Contributions are welcome, and adding a company to the registry is a great first PR.
+Read the [Contributing Guide](.github/CONTRIBUTING.md) for setup, tests, and data-source rules,
+and the [developer docs](docs/) for how connectors, the scheduler, and verification work.
+
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
 # 📄 License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
 
 ---
 
