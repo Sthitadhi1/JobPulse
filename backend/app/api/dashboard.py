@@ -8,7 +8,7 @@ from sqlalchemy import func
 from backend.app.database import get_db
 from backend.app.models.application import JobApplication
 from backend.app.models.job import Job, Bookmark, CandidateProfile, User
-from backend.app.api.auth import get_current_user_optional
+from backend.app.api.auth import get_current_user
 from backend.app.engine.ai_layer import AIEngineLayer
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -66,7 +66,7 @@ async def get_dashboard_metrics(db: AsyncSession = Depends(get_db)):
 
 @router.get("/overview")
 async def get_dashboard_overview(
-    current_user: Depends = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -77,47 +77,44 @@ async def get_dashboard_overview(
     - Top Matches Preview list (Top 3-4 recommended jobs)
     - Recent Applications Pipeline breakdown (Saved, Applied, OA/Test, Interview, Offer)
     """
-    user_name = current_user.name if current_user else "Sthitadhi"
+    user_name = current_user.name
 
     # 1. Active Jobs Count (Live & Verified ACTIVE)
     active_jobs_res = await db.execute(select(func.count(Job.id)).where(Job.status == "ACTIVE"))
     active_jobs_count = active_jobs_res.scalar() or 0
 
-    # 2. Bookmarked Jobs Count
-    if current_user:
-        bm_res = await db.execute(select(func.count(Bookmark.id)).where(Bookmark.user_id == current_user.id))
-    else:
-        bm_res = await db.execute(select(func.count(Job.id)).where(Job.is_bookmarked == True))
+    # 2. Bookmarked Jobs Count (this user's bookmarks only)
+    bm_res = await db.execute(select(func.count(Bookmark.id)).where(Bookmark.user_id == current_user.id))
     bookmarked_count = bm_res.scalar() or 0
 
-    # 3. Applications Count & Pipeline Breakdown
-    saved_res = await db.execute(select(func.count(JobApplication.id)).where(JobApplication.status == "Saved"))
-    saved_count = saved_res.scalar() or 0
+    # 3. Applications Count & Pipeline Breakdown (this user's applications only)
+    status_res = await db.execute(
+        select(JobApplication.status, func.count(JobApplication.id))
+        .where(JobApplication.user_id == current_user.id)
+        .group_by(JobApplication.status)
+    )
+    by_status = dict(status_res.all())
 
-    applied_res = await db.execute(select(func.count(JobApplication.id)).where(JobApplication.status == "Applied"))
-    applied_count = applied_res.scalar() or 0
+    def count_statuses(*statuses):
+        return sum(by_status.get(st, 0) for st in statuses)
 
-    oa_res = await db.execute(select(func.count(JobApplication.id)).where(JobApplication.status.in_(["OA Scheduled", "OA / Test", "Interview"])))
-    oa_count = oa_res.scalar() or 0
-
-    interview_res = await db.execute(select(func.count(JobApplication.id)).where(JobApplication.status.in_(["Interview", "HR Round"])))
-    interview_count = interview_res.scalar() or 0
-
-    offer_res = await db.execute(select(func.count(JobApplication.id)).where(JobApplication.status == "Offer"))
-    offer_count = offer_res.scalar() or 0
+    saved_count = count_statuses("Saved")
+    applied_count = count_statuses("Applied")
+    oa_count = count_statuses("OA Scheduled", "OA / Test")
+    interview_count = count_statuses("Interview", "HR Round")
+    offer_count = count_statuses("Offer")
 
     total_applications = saved_count + applied_count + oa_count + interview_count + offer_count
 
     # 4. Top Matches Preview
     cand_profile = None
-    if current_user:
-        cp_res = await db.execute(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
-        cp = cp_res.scalars().first()
-        if cp and cp.parsed_json:
-            try:
-                cand_profile = json.loads(cp.parsed_json)
-            except Exception:
-                cand_profile = None
+    cp_res = await db.execute(select(CandidateProfile).where(CandidateProfile.user_id == current_user.id))
+    cp = cp_res.scalars().first()
+    if cp and cp.parsed_json:
+        try:
+            cand_profile = json.loads(cp.parsed_json)
+        except Exception:
+            cand_profile = None
 
     if not cand_profile:
         cand_profile = {

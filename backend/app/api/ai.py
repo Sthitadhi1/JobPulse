@@ -9,6 +9,7 @@ from backend.app.models.job import Job, CandidateProfile, User
 from backend.app.api.auth import get_current_user_optional
 from backend.app.engine.ai_layer import AIEngineLayer
 from backend.app.engine.resume_parser import ResumeParserEngine
+from backend.app.services.bookmark_service import annotate_bookmarks
 
 router = APIRouter(prefix="/ai", tags=["AI Features"])
 
@@ -89,6 +90,7 @@ async def upload_and_parse_resume(
         await db.commit()
 
     recommendations = await AIEngineLayer.get_top_30_recommendations(db, parsed_profile)
+    await annotate_bookmarks(db, current_user, recommendations, id_key="job_id")
 
     return {
         "success": True,
@@ -145,6 +147,7 @@ Full-Stack Career Intelligence Engine - Interactive web platform with React, Typ
         """, "Alex_Sharma_Resume.pdf")
 
     recommendations = await AIEngineLayer.get_top_30_recommendations(db, candidate_profile)
+    await annotate_bookmarks(db, current_user, recommendations, id_key="job_id")
 
     return {
         "success": True,
@@ -193,6 +196,7 @@ async def match_resume_to_specific_job(
         }
 
     match_result = AIEngineLayer.match_candidate_to_job(cand_profile, job)
+    await annotate_bookmarks(db, current_user, [match_result], id_key="job_id")
 
     return {
         "success": True,

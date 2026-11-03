@@ -276,7 +276,7 @@ class AIEngineLayer:
             "source": job.source,
             "status": job.status,
             "verification_status": job.verification_status,
-            "is_bookmarked": job.is_bookmarked,
+            "is_bookmarked": False,  # per user; filled in by the API layer
             "match_score": total_score,
             "match_classification": classification,
             "application_priority": priority,
